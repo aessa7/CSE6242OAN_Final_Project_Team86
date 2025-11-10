@@ -76,55 +76,6 @@ docker run -p 8050:8050 geiq-dashboard:latest
 # Open http://localhost:8050
 ```
 
-#### Deploy to Render (or Railway/Fly.io)
-
-1. Push your repository to GitHub (if not already done):
-   ```bash
-   git add .
-   git commit -m "Add Dockerfile and deployment files"
-   git push origin main
-   ```
-
-2. Go to [Render.com](https://render.com) and sign up (free tier available)
-
-3. Click **"New +"** → **"Web Service"** and connect your GitHub repository
-
-4. Configure the service:
-   - **Name**: `geo-equity-dashboard` (or your choice)
-   - **Environment**: Docker
-   - **Build Command**: (leave default or blank; Render auto-detects Dockerfile)
-   - **Start Command**: (leave blank; Dockerfile has CMD)
-   - **Instance Type**: Free tier works for testing; upgrade for production
-   - **Environment Variables**: (none required; PORT is auto-set)
-
-5. Click **"Create Web Service"** and wait for deployment (3-5 minutes)
-
-6. Once deployed, Render provides a public URL (e.g., `https://geo-equity-dashboard.onrender.com`)
-
-#### Deploy to Railway.app (Alternative)
-
-1. Go to [Railway.app](https://railway.app)
-2. Click **"New Project"** → **"Deploy from GitHub repo"**
-3. Select your repository and authorize
-4. Railway auto-detects the Dockerfile and deploys
-
-#### Deploy to Fly.io (Alternative)
-
-1. Install flyctl: https://fly.io/docs/getting-started/installing-flyctl/
-2. Run: `flyctl launch` in your project directory
-3. Follow prompts and deploy: `flyctl deploy`
-
-### Option B: Without Docker (For Heroku or other platforms with system libs)
-
-If your hosting platform supports system libraries (GDAL, PROJ), you can use `requirements.txt` + `Procfile`:
-
-```bash
-# On Heroku:
-git push heroku main
-```
-
-Note: Most free hosting platforms lack GDAL/PROJ by default. Docker (Option A) is more reliable.
-
 ## Performance Tips
 
 - **Basemap Selection**: Use "No Basemap" for instant address lookups; "Light" is a good balance; "Detailed" is slowest but shows streets.

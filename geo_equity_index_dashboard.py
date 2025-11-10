@@ -19,6 +19,35 @@ from shapely.geometry import Point
 app = dash.Dash(__name__)
 app.title = "Geo-Equity Index: An Interactive Environmental & Socioeconomic Health Risk Mapping Tool"
 
+# Add custom CSS to constrain tooltip within the map container
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            .hoverlayer .hovertext {
+                max-width: 350px;
+                word-wrap: break-word;
+            }
+            .plotly-graph-div {
+                overflow: visible !important;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 # Global variables
 cimc_data = None
 census_tracts_gdf = None  # GeoDataFrame for census tracts
@@ -186,6 +215,45 @@ def get_coordinates(address):
         print(f"Geocoding error: {e}")
         return None, None, None
 
+def get_census_tract_info(lat, lon):
+    """Get census tract information for a given latitude/longitude point"""
+    global census_tracts_gdf
+    
+    if census_tracts_gdf is None:
+        return None
+    
+    try:
+        # Create a point from the coordinates
+        point = Point(lon, lat)
+        
+        # Find census tracts that contain this point
+        containing_tracts = census_tracts_gdf[census_tracts_gdf.geometry.contains(point)]
+        
+        if len(containing_tracts) > 0:
+            # Get the first (should be only one) tract containing the point
+            tract = containing_tracts.iloc[0]
+            
+            # Extract relevant information
+            info = {
+                'geoid': tract.get('GEOID', 'N/A'),
+                'name': tract.get('NAME', 'N/A'),
+                'state': tract.get('STUSPS', 'N/A'),
+                'eji_score': tract.get('RPL_EJI_CB', 'N/A'),
+            }
+            
+            print(f"✓ Found census tract: GEOID={info['geoid']}, EJI={info['eji_score']}")
+            return info
+        else:
+            print(f"⚠️  No census tract found for point ({lat}, {lon})")
+            return None
+            
+    except Exception as e:
+        print(f"Error getting census tract info: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def filter_cimc_within_radius(center_lat, center_lon, radius_miles):
     """Filter CIMC data within radius"""
     if cimc_data is None:
@@ -311,7 +379,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                         title="GEI Score",
                         thickness=10,
                         len=0.5,
-                        x=1,
+                        x=1.05,
                         y=0.5  # Align with CIMC colorbar top
                     ),
                     hovertemplate='<b>Census Tract</b><br>' +
@@ -407,6 +475,24 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     
     # Layer 3: Add search location marker LAST (marker on top of everything)
     print(f"🎯 Adding address marker at: lat={lat}, lon={lon}")  # Debug print
+    
+    # Get census tract info for the search address
+    census_info = get_census_tract_info(lat, lon)
+    
+    # Build hover text with census tract info
+    hover_text = f"📍 Search Location<br>{formatted_address}"
+    if census_info:
+        hover_text += f"<br><br><b>Census Tract Info:</b>"
+        hover_text += f"<br>GEOID: {census_info['geoid']}"
+        hover_text += f"<br>Name: {census_info['name']}"
+        hover_text += f"<br>State: {census_info['state']}"
+        if census_info['eji_score'] != 'N/A':
+            hover_text += f"<br>GEI Score: {census_info['eji_score']:.4f}"
+        else:
+            hover_text += f"<br>GEI Score: {census_info['eji_score']}"
+    else:
+        hover_text += "<br><br>⚠️ Census tract information not available"
+    
     fig.add_trace(go.Scattermap(
         lat=[lat],
         lon=[lon],
@@ -420,7 +506,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         text=['📍'],  # Pin emoji as text
         textfont=dict(size=30, color='red'),
         textposition='top center',
-        hovertext=[f"📍 Search Location<br>{formatted_address}"],
+        hovertext=[hover_text],
         hoverinfo='text',
         name='Search Address',
         showlegend=False
@@ -446,7 +532,13 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         height=1000,  # Fixed height
         autosize=False,  # Prevent auto-resizing
         margin=dict(l=0, r=250, t=30, b=0),  # Increased right margin for colorbars
-        title=f"CIMC Sites within {radius_miles} miles of {formatted_address[:50]}..."
+        title=f"CIMC Sites within {radius_miles} miles of {formatted_address[:50]}...",
+        hoverlabel=dict(
+            bgcolor="white",  # White background
+            bordercolor="black",  # Black border
+            font=dict(color="black", size=13),  # Black text
+            namelength=-1  # Show full text
+        )
     )
     
     return fig, formatted_address, cimc_count
