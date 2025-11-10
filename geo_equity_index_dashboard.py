@@ -36,7 +36,7 @@ def load_cimc_data():
         filename = 'data/CIMC_Sites_Hazard_Score.csv'
         
         if os.path.exists(filename):
-            cimc_data = pd.read_csv(filename)
+            cimc_data = pd.read_csv(filename, low_memory=False)
             print(f"✓ Loaded CIMC data from {filename}: {len(cimc_data)} records")
             
             # Get hazard score range
