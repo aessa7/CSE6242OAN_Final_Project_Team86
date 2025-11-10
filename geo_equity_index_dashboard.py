@@ -19,35 +19,6 @@ from shapely.geometry import Point
 app = dash.Dash(__name__)
 app.title = "Geo-Equity Index: An Interactive Environmental & Socioeconomic Health Risk Mapping Tool"
 
-# Add custom CSS to constrain tooltip within the map container
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            .hoverlayer .hovertext {
-                max-width: 350px;
-                word-wrap: break-word;
-            }
-            .plotly-graph-div {
-                overflow: visible !important;
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
 # Global variables
 cimc_data = None
 census_tracts_gdf = None  # GeoDataFrame for census tracts
@@ -377,13 +348,14 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                     marker_line_color='white',
                     colorbar=dict(
                         title="GEI Score",
-                        thickness=10,
+                        thickness=15,
                         len=0.5,
                         x=1.05,
                         y=0.5  # Align with CIMC colorbar top
                     ),
                     hovertemplate='<b>Census Tract</b><br>' +
                                  'RPL_EJI_CB: %{z:.4f}<extra></extra>',
+                    hoverlabel=dict(namelength=-1),
                     name='Census Tracts'
                 ))
         else:
@@ -399,6 +371,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                 marker_line_color='gray',
                 showscale=False,
                 hovertemplate='<b>Census Tract</b><extra></extra>',
+                hoverlabel=dict(namelength=-1),
                 name='Census Tracts'
             ))
     
@@ -482,7 +455,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     # Build hover text with census tract info
     hover_text = f"📍 Search Location<br>{formatted_address}"
     if census_info:
-        hover_text += f"<br><br><b>Census Tract Info:</b>"
+        hover_text += f"<br><br><b>GEI Score Info:</b>"
         hover_text += f"<br>GEOID: {census_info['geoid']}"
         hover_text += f"<br>Name: {census_info['name']}"
         hover_text += f"<br>State: {census_info['state']}"
@@ -636,8 +609,13 @@ app.layout = html.Div([
         
         # Map
         html.Div([
-            dcc.Graph(id='cimc-map', figure=create_default_us_map(), style={'height': '1000px'})
-        ], style={'marginBottom': 20}),
+            dcc.Graph(
+                id='cimc-map', 
+                figure=create_default_us_map(), 
+                style={'height': '1000px', 'overflow': 'hidden'},
+                config={'responsive': True, 'displayModeBar': True}
+            )
+        ], style={'marginBottom': 20, 'position': 'relative', 'overflow': 'hidden'}),
         
         # Data info
         html.Div([
