@@ -1,0 +1,11 @@
+dash
+plotly
+pandas
+numpy
+geopy
+geopandas
+shapely
+gunicorn
+
+# Optional (uncomment if you need spatial index support)
+# rtree

@@ -1,0 +1,18 @@
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+.git/
+.github/
+node_modules/
+dist/
+build/
+venv/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+*.log
+
+# Include the data directory if you want to copy data into the image
+# If your data is large and you plan to mount it at runtime, you can leave it out
+# data/
