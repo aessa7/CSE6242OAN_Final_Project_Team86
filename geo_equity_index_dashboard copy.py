@@ -25,8 +25,8 @@ census_tracts_gdf = None  # GeoDataFrame for census tracts
 geolocator = Nominatim(user_agent="geoequity_index_dashboard")
 hazard_score_min = None
 hazard_score_max = None
-gei_min = None  # Minimum GEI_overall_score value
-gei_max = None  # Maximum GEI_overall_score value
+eji_min = None  # Minimum RPL_EJI_CB value
+eji_max = None  # Maximum RPL_EJI_CB value
 geocode_cache = {}  # Cache for geocoded addresses
 
 def load_cimc_data():
@@ -57,17 +57,13 @@ def load_cimc_data():
         return False
 
 def load_census_tracts():
-    """Load census tract GeoPackage with GEI data"""
-    global census_tracts_gdf, gei_min, gei_max
+    """Load census tract shapefile with EJI data"""
+    global census_tracts_gdf, eji_min, eji_max
     try:
-        filename = 'data/census_tracts_with_gei.gpkg'
+        filename = 'data/census_tracts_with_eji.shp'
         
         if os.path.exists(filename):
             print(f"⏳ Loading census tracts from {filename}...")
-            file_size_mb = os.path.getsize(filename) / (1024 * 1024)
-            print(f"   File size: {file_size_mb:.2f} MB (this may take a moment)...")
-            
-            # Load GeoPackage (much faster than GeoJSON)
             census_tracts_gdf = gpd.read_file(filename)
             
             print(f"✓ Loaded census tracts: {len(census_tracts_gdf)} tracts")
@@ -80,19 +76,19 @@ def load_census_tracts():
                 census_tracts_gdf = census_tracts_gdf.to_crs(epsg=4326)
                 print(f"✓ CRS converted to EPSG:4326")
             
-            # Get GEI_overall_score range for the full dataset
-            if 'GEI_overall_score' in census_tracts_gdf.columns:
+            # Get RPL_EJI_CB range for the full dataset
+            if 'RPL_EJI_CB' in census_tracts_gdf.columns:
                 # Exclude -999 values (missing/invalid data)
-                valid_gei = census_tracts_gdf[census_tracts_gdf['GEI_overall_score'] != -999]['GEI_overall_score']
-                gei_min = valid_gei.min()
-                gei_max = valid_gei.max()
-                print(f"✓ GEI_overall_score range: {gei_min:.4f} to {gei_max:.4f} (excluding -999 values)")
+                valid_eji = census_tracts_gdf[census_tracts_gdf['RPL_EJI_CB'] != -999]['RPL_EJI_CB']
+                eji_min = valid_eji.min()
+                eji_max = valid_eji.max()
+                print(f"✓ RPL_EJI_CB range: {eji_min:.4f} to {eji_max:.4f} (excluding -999 values)")
             else:
-                print("⚠️  GEI_overall_score column not found")
+                print("⚠️  RPL_EJI_CB column not found")
             
             return True
         
-        print(f"⚠️  census_tracts_with_gei.gpkg not found")
+        print(f"⚠️  census_tracts_with_eji.shp not found")
         return False
         
     except Exception as e:
@@ -213,10 +209,10 @@ def get_census_tract_info(lat, lon):
                 'geoid': tract.get('GEOID', 'N/A'),
                 'name': tract.get('NAME', 'N/A'),
                 'state': tract.get('STUSPS', 'N/A'),
-                'gei_score': tract.get('GEI_overall_score', 'N/A'),
+                'eji_score': tract.get('RPL_EJI_CB', 'N/A'),
             }
             
-            print(f"✓ Found census tract: GEOID={info['geoid']}, GEI={info['gei_score']}")
+            print(f"✓ Found census tract: GEOID={info['geoid']}, EJI={info['eji_score']}")
             return info
         else:
             print(f"⚠️  No census tract found for point ({lat}, {lon})")
@@ -330,23 +326,23 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         # Convert GeoDataFrame to GeoJSON format for Plotly
         import json
         
-        # Use GEI_overall_score column for coloring
-        if 'GEI_overall_score' in nearby_tracts.columns:
+        # Use RPL_EJI_CB column for coloring
+        if 'RPL_EJI_CB' in nearby_tracts.columns:
             # Filter out tracts with -999 values (missing/invalid data)
-            valid_tracts = nearby_tracts[nearby_tracts['GEI_overall_score'] != -999].copy()
+            valid_tracts = nearby_tracts[nearby_tracts['RPL_EJI_CB'] != -999].copy()
             
             if len(valid_tracts) > 0:
-                # Create choropleth with GEI_overall_score data using blue gradient
+                # Create choropleth with RPL_EJI_CB data using blue gradient
                 geojson_data = json.loads(valid_tracts.to_json())
                 
                 # Add choropleth layer with blue color scale
                 fig.add_trace(go.Choroplethmap(
                     geojson=geojson_data,
                     locations=valid_tracts.index,
-                    z=valid_tracts['GEI_overall_score'],
+                    z=valid_tracts['RPL_EJI_CB'],
                     colorscale='Blues',  # Light blue to dark blue gradient
-                    zmin=gei_min,  # Use full range from entire dataset (excluding -999)
-                    zmax=gei_max,
+                    zmin=eji_min,  # Use full range from entire dataset (excluding -999)
+                    zmax=eji_max,
                     marker_opacity=0.6,
                     marker_line_width=0.5,
                     marker_line_color='white',
@@ -358,12 +354,12 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                         y=0.5  # Align with CIMC colorbar top
                     ),
                     hovertemplate='<b>Census Tract</b><br>' +
-                                 'GEI_overall_score: %{z:.4f}<extra></extra>',
+                                 'RPL_EJI_CB: %{z:.4f}<extra></extra>',
                     hoverlabel=dict(namelength=-1),
                     name='Census Tracts'
                 ))
         else:
-            # No GEI_overall_score data, just show tract boundaries
+            # No RPL_EJI_CB data, just show tract boundaries
             geojson_data = json.loads(nearby_tracts.to_json())
             fig.add_trace(go.Choroplethmap(
                 geojson=geojson_data,
@@ -463,10 +459,10 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         hover_text += f"<br>GEOID: {census_info['geoid']}"
         hover_text += f"<br>Name: {census_info['name']}"
         hover_text += f"<br>State: {census_info['state']}"
-        if census_info['gei_score'] != 'N/A':
-            hover_text += f"<br>GEI Score: {census_info['gei_score']:.4f}"
+        if census_info['eji_score'] != 'N/A':
+            hover_text += f"<br>GEI Score: {census_info['eji_score']:.4f}"
         else:
-            hover_text += f"<br>GEI Score: {census_info['gei_score']}"
+            hover_text += f"<br>GEI Score: {census_info['eji_score']}"
     else:
         hover_text += "<br><br>⚠️ Census tract information not available"
     

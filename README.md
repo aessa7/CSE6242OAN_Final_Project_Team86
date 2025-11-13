@@ -9,6 +9,7 @@ A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores and CIMC
 - 📊 Real-time filtering: Adjust the search radius with a slider to dynamically update results
 - 🎨 Multiple basemap styles: Choose between no basemap (fastest), light, or detailed maps
 - 💾 Address geocoding cache: Repeated addresses are cached for instant lookups
+- 📈 Census Tract Info: Hover over the search location to see GEI score and census tract information
 
 ## Data Requirements
 
@@ -18,10 +19,11 @@ The application requires two data files in the `data/` directory:
    - Required columns: `LATITUDE`, `LONGITUDE`, `Hazard_Score`
    - Optional columns: `Site_Name`, `Status`, `Type`, `Address`, `City`, `State`
 
-2. **census_tracts_with_eji.shp** - Shapefile with census tract data and EJI scores
-   - Required columns: `RPL_EJI_CB` (EJI score)
-   - The app will auto-convert to EPSG:4326 if needed
-   - All shapefile components must be present: `.shp`, `.shx`, `.dbf`, `.prj`, `.cpg`
+2. **census_tracts_with_gei.gpkg** - GeoPackage with census tract data and GEI scores
+   - Required columns: `GEI_overall_score` (overall GEI score)
+   - Additional columns: `GEOID`, `NAME`, `STUSPS` (state code)
+   - GeoPackage format is optimized for fast loading of large spatial datasets
+   - Alternative: `census_tracts_with_gei.geojson` (if GeoPackage unavailable, but slower)
 
 ## Local Development
 
@@ -76,12 +78,37 @@ docker run -p 8050:8050 geiq-dashboard:latest
 # Open http://localhost:8050
 ```
 
+#### Deploy to Render (or Railway/Fly.io)
+
+1. Push your repository to GitHub (if not already done):
+   ```bash
+   git add .
+   git commit -m "Update to use GeoPackage for faster loading"
+   git push origin main
+   ```
+
+2. Go to [Render.com](https://render.com) and sign up (free tier available)
+
+3. Click **"New +"** → **"Web Service"** and connect your GitHub repository
+
+4. Configure the service:
+   - **Name**: `geo-equity-dashboard` (or your choice)
+   - **Environment**: Docker
+   - **Build Command**: (leave default or blank; Render auto-detects Dockerfile)
+   - **Start Command**: (leave blank; Dockerfile has CMD)
+   - **Instance Type**: Free tier works for testing; upgrade for production
+   - **Environment Variables**: (none required; PORT is auto-set)
+
+5. Click **"Create Web Service"** and wait for deployment (3-5 minutes)
+
+6. Once deployed, Render provides a public URL (e.g., `https://geo-equity-dashboard.onrender.com`)
+
 ## Performance Tips
 
-- **Basemap Selection**: Use "No Basemap" for instant address lookups; "Light" is a good balance; "Detailed" is slowest but shows streets.
-- **Geocoding Cache**: Addresses are cached in memory. For production, consider a Redis cache for multi-instance deployments.
-- **Shapefile Size**: If census tract loading is slow, consider simplifying the shapefile or converting to GeoJSON.
-- **Nominatim Rate Limits**: The app uses Nominatim (free geocoding). For high-traffic production apps, consider a paid geocoding API (Mapbox, Google Places).
+- **Data Loading**: GeoPackage format (.gpkg) is used for fast census tract loading (~173 MB, loads in <30 seconds)
+- **Basemap Selection**: Use "No Basemap" for instant address lookups; "Light" is a good balance; "Detailed" is slowest but shows streets
+- **Geocoding Cache**: Addresses are cached in memory. For production, consider a Redis cache for multi-instance deployments
+- **Nominatim Rate Limits**: The app uses Nominatim (free geocoding). For high-traffic production apps, consider a paid geocoding API (Mapbox, Google Places)
 
 ## Troubleshooting
 
@@ -89,24 +116,30 @@ docker run -p 8050:8050 geiq-dashboard:latest
 - Ensure the CSV file is in the `data/` directory
 - Check file name spelling and case
 
-### Issue: "census_tracts_with_eji.shp not found"
-- Ensure all shapefile components are in the `data/` directory (`.shp`, `.shx`, `.dbf`, `.prj`, `.cpg`)
-- Check file name spelling and case
+### Issue: "census_tracts_with_gei.gpkg not found"
+- Ensure the GeoPackage file is in the `data/` directory
+- If using GeoJSON instead, ensure `census_tracts_with_gei.geojson` is present
+- GeoPackage is recommended for better performance
 
 ### Issue: Address geocoding fails
 - Check internet connection (Nominatim requires external API calls)
 - Try a more complete address (street, city, state, zip)
 
-### Issue: Map loads slowly with large shapefiles
-- Switch to "No Basemap" or "Light" basemap
-- Consider pre-computing and caching map tiles
-- Simplify the shapefile (reduce polygon complexity)
+### Issue: Map loads slowly on startup
+- This is normal with large census tract datasets. The initial load may take 20-30 seconds
+- Subsequent searches use cached geocoding for faster results
+- Consider using a simpler dataset for testing if needed
+
+### Issue: Census tract information not showing in tooltip
+- Ensure the GeoPackage contains the `GEI_overall_score`, `GEOID`, `NAME`, and `STUSPS` columns
+- Check that the search address is within the coverage area of the census tracts
 
 ## Technologies Used
 
 - **Frontend**: Dash, Plotly (interactive maps and visualizations)
 - **Backend**: Python, Flask (underlying Dash framework)
-- **Geospatial**: GeoPandas, Shapely, Geopandas, Fiona, GDAL
+- **Geospatial**: GeoPandas, Shapely, GDAL, Fiona
+- **Data Formats**: GeoPackage (.gpkg), GeoJSON, Shapefile
 - **Geocoding**: Geopy (Nominatim)
 - **Data**: Pandas, NumPy
 - **Serving**: Gunicorn (production WSGI server)
@@ -124,11 +157,13 @@ CSE6242OAN_Final_Project/
 ├── README.md                      # This file
 └── data/
     ├── CIMC_Sites_Hazard_Score.csv
-    ├── census_tracts_with_eji.shp
-    ├── census_tracts_with_eji.shx
-    ├── census_tracts_with_eji.dbf
-    ├── census_tracts_with_eji.prj
-    └── census_tracts_with_eji.cpg
+    ├── census_tracts_with_gei.gpkg        # Primary: GeoPackage (fast)
+    ├── census_tracts_with_gei.geojson     # Alternative: GeoJSON (slower)
+    ├── census_tracts_with_gei.shp         # Original shapefile components
+    ├── census_tracts_with_gei.shx
+    ├── census_tracts_with_gei.dbf
+    ├── census_tracts_with_gei.prj
+    └── census_tracts_with_gei.cpg
 ```
 
 ## License
