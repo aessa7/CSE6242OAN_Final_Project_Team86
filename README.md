@@ -118,7 +118,7 @@ docker run -p 8050:8050 geiq-dashboard:latest
 3. Click **"New +"** → **"Web Service"** and connect your GitHub repository
 
 4. Configure the service:
-   - **Name**: `geo-equity-dashboard` (or your choice)
+   - **Name**: `geo-equity-dashboard`
    - **Environment**: Docker
    - **Build Command**: (leave default or blank; Render auto-detects Dockerfile)
    - **Start Command**: (leave blank; Dockerfile has CMD)
@@ -144,7 +144,7 @@ docker run -p 8050:8050 geiq-dashboard:latest
 
 ## Recent Updates
 
-### Latest Features (January 2025)
+### Latest Features
 - ✅ Added Git LFS support for large GeoPackage file management
 - ✅ Implemented Top 10 Features table with raw values and percentiles by domain
 - ✅ Enhanced percentile display (converted to 0-100 scale, 2 decimal places)
@@ -156,27 +156,12 @@ docker run -p 8050:8050 geiq-dashboard:latest
 
 ## Troubleshooting
 
-### Issue: "CIMC_Sites_Hazard_Score.csv not found"
-- Ensure the CSV file is in the `data/` directory
-- Check file name spelling and case
-
-### Issue: "census_tracts_with_gei.gpkg not found"
-- Ensure the GeoPackage file is in the `data/` directory
-- If using GeoJSON instead, ensure `census_tracts_with_gei.geojson` is present
-- GeoPackage is recommended for better performance
-
 ### Issue: Address geocoding fails
 - Check internet connection (Nominatim requires external API calls)
 - Try a more complete address (street, city, state, zip)
 
 ### Issue: Map loads slowly on startup
 - This is normal with large census tract datasets. The initial load may take 20-30 seconds
-- Subsequent searches use cached geocoding for faster results
-- Consider using a simpler dataset for testing if needed
-
-### Issue: Census tract information not showing in tooltip
-- Ensure the GeoPackage contains the `GEI_overall_score`, `GEOID`, `NAME`, and `STUSPS` columns
-- Check that the search address is within the coverage area of the census tracts
 
 ## Technologies Used
 
@@ -214,8 +199,8 @@ CSE6242OAN_Final_Project/
 
 ## License
 
-[Add license information here]
+
 
 ## Contact
 
-For questions or issues, please contact: [Your contact info]
+For questions or issues, please contact: aessa7@gatech.edu

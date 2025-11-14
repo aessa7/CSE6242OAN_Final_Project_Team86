@@ -616,8 +616,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         width=1400,  # Fixed width
         height=1000,  # Fixed height
         autosize=False,  # Prevent auto-resizing
-        margin=dict(l=0, r=250, t=30, b=0),  # Increased right margin for colorbars
-        title=f"CIMC Sites within {radius_miles} miles of {formatted_address[:50]}...",
+        margin=dict(l=0, r=250, t=60, b=0),  # Increased top margin for title spacing
+        title=f"Found <b>{len(nearby_cimc)}</b> CIMC sites within <b>{radius_miles}</b> miles of: <br>{formatted_address}",
         hoverlabel=dict(
             bgcolor="white",  # White background
             bordercolor="black",  # Black border
@@ -702,7 +702,6 @@ app.layout = html.Div([
                 " Use 'No Basemap' for instant address lookups with just markers. ",
                 "Use 'Light' for a clean map. ",
                 "Switch to 'Detailed' for street-level detail. ",
-                "Addresses are cached for instant re-use."
             ], style={'fontSize': 13, 'color': '#666', 'textAlign': 'center', 'fontStyle': 'italic'})
         ], style={'marginBottom': 15}),
         
@@ -794,21 +793,8 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
             use_light_basemap=map_style
         )
         
-        if cimc_count >= 0:
-            status_msg = html.Div([
-                html.P(f"✅ Found {cimc_count} CIMC sites within {radius} miles of:", 
-                       style={'color': 'green', 'fontWeight': 'bold', 'marginBottom': 5}),
-                html.P(f"{formatted_address}", style={'fontStyle': 'italic'})
-            ])
-            
-            map_style_label = {
-                'none': 'No Basemap (Fastest)',
-                'light': 'Fast (Light)',
-                'detailed': 'Detailed'
-            }.get(map_style, map_style)
-            
-            # Create Data Info with Top 10 Features and their values from census tract
-            if top_features_df is not None and census_info is not None:
+        # Create Data Info with Top 10 Features and their values from census tract
+        if top_features_df is not None and census_info is not None:
                 # Get the census tract data for the address
                 lat, lon, _ = get_coordinates(address.strip())
                 point = Point(lon, lat)
@@ -903,17 +889,17 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                     data_info = html.P("Census tract not found for this address", 
                                      style={'color': '#999', 'fontStyle': 'italic'})
                     data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
-            elif top_features_df is not None:
-                data_info = html.P("Census tract data not available for feature values", 
-                                 style={'color': '#999', 'fontStyle': 'italic'})
-                data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
-            else:
-                data_info = html.P("Top features data not available", 
-                                 style={'color': '#999', 'fontStyle': 'italic'})
-                data_info_style = {'display': 'none'}
-            
-            # Create GEI info box
-            if census_info:
+        elif top_features_df is not None:
+            data_info = html.P("Census tract data not available for feature values", 
+                             style={'color': '#999', 'fontStyle': 'italic'})
+            data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
+        else:
+            data_info = html.P("Top features data not available", 
+                             style={'color': '#999', 'fontStyle': 'italic'})
+            data_info_style = {'display': 'none'}
+        
+        # Create GEI info box
+        if census_info:
                 gei_box = html.Div([
                     html.H4("📊 GEI Scores for Search Location", style={'textAlign': 'center', 'color': '#1976d2', 'marginBottom': 15}),
                     html.Div([
@@ -947,17 +933,11 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                     'zIndex': 1000,
                     'display': 'block'  # Show when data is available
                 }
-            else:
-                gei_box = ""
-                gei_box_style = {'display': 'none'}  # Hide when no data
         else:
-            status_msg = html.P("❌ Address not found", style={'color': 'red'})
-            data_info = ""
-            data_info_style = {'display': 'none'}
             gei_box = ""
-            gei_box_style = {'display': 'none'}
+            gei_box_style = {'display': 'none'}  # Hide when no data
             
-        return fig, status_msg, data_info, data_info_style, gei_box, gei_box_style
+        return fig, "", data_info, data_info_style, gei_box, gei_box_style
         
     except Exception as e:
         error_msg = html.P(f"❌ Error: {str(e)}", style={'color': 'red'})
