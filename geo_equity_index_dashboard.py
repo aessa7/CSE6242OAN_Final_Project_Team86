@@ -467,6 +467,11 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                         value_wrapped = wrap_text(str(point[field]), 38)
                         hover_text += f"<br>{field}: {value_wrapped}"
                 
+                # Add URL as a clickable link if available
+                if 'URL' in point and pd.notna(point['URL']):
+                    url = str(point['URL'])
+                    hover_text += f"<br>URL: <a href='{url}' target='_blank' style='color: #3498db;'>Go to URL</a>"
+                
                 cimc_lats.append(point_lat)
                 cimc_lons.append(point_lon)
                 cimc_texts.append(hover_text)
@@ -545,7 +550,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         lat=[lat],
         lon=[lon],
         mode='markers',
-        marker=dict(size=45, color='rgba(255,20,147,0.2)'),
+        marker=dict(size=45, color='rgba(0,123,255,0.3)'),
         showlegend=False,
         hoverinfo='skip'
     ))
@@ -555,7 +560,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         lat=[lat],
         lon=[lon],
         mode='markers',
-        marker=dict(size=30, color='rgba(255,20,147,0.4)'),
+        marker=dict(size=30, color='rgba(138,43,226,0.5)'),
         showlegend=False,
         hoverinfo='skip'
     ))
@@ -565,17 +570,17 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         lat=[lat],
         lon=[lon],
         mode='markers',
-        marker=dict(size=18, color='rgba(255,20,147,0.6)'),
+        marker=dict(size=18, color='rgba(255,0,255,0.7)'),
         showlegend=False,
         hoverinfo='skip'
     ))
     
-    # Center marker with hot pink ring (with hover info)
+    # Center marker with magenta ring (with hover info)
     fig.add_trace(go.Scattermap(
         lat=[lat],
         lon=[lon],
         mode='markers',
-        marker=dict(size=10, color='hotpink'),
+        marker=dict(size=10, color='#FF00FF'),
         showlegend=False,
         hoverinfo='skip'
     ))
@@ -585,7 +590,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         lat=[lat],
         lon=[lon],
         mode='markers',
-        marker=dict(size=6, color='deeppink'),
+        marker=dict(size=6, color='#8B00FF'),
         hovertext=[hover_text],
         hoverinfo='text',
         name='Search Address',
@@ -857,12 +862,12 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                                     pctl_value = tract_data[pctl_feature_name]
                                     if pd.notna(pctl_value):
                                         if isinstance(pctl_value, (int, np.integer)):
-                                            pctl_str = f"{pctl_value:,}"
+                                            pctl_str = f"{pctl_value * 100:,.2f}"
                                         elif isinstance(pctl_value, (float, np.floating)):
                                             if pctl_value == -999:
                                                 pctl_str = "N/A"
                                             else:
-                                                pctl_str = f"{pctl_value:.4f}"
+                                                pctl_str = f"{pctl_value * 100:.2f}"
                                         else:
                                             pctl_str = str(pctl_value)
                                     else:
