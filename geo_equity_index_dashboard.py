@@ -707,7 +707,7 @@ app.layout = html.Div([
                     style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': 10, 'display': 'inline-block', 'width': '100%'}),
             html.Div([
                 html.Button(
-                    'ℹ️ Learn More',
+                    'ℹ️ Learn more about GEI',
                     id='about-button',
                     n_clicks=0,
                     style={
