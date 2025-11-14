@@ -651,14 +651,14 @@ app.layout = html.Div([
                     html.Strong("U.S. Census Bureau"), 
                     ", and other authoritative sources to generate a singular health score for your neighborhood. ",
                     "The GEI score, rated from ",
-                    html.Strong("0 to 1"),
+                    html.Strong("0 (best) to 1 (worst)"),
                     ", provides an at-a-glance assessment of environmental and socioeconomic health factors in your area."
                 ], style={'marginBottom': 15, 'lineHeight': 1.6}),
                 html.P([
                     "The tool also incorporates hazardous sites as defined by the EPA's ",
                     html.Strong("Cleanup In My Community (CIMC)"),
                     " program, with each site ranked on a scale of ",
-                    html.Strong("1 to 6"),
+                    html.Strong("1 (best) to 6 (worst)"),
                     " for hazard severity. Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
                 ], style={'marginBottom': 20, 'lineHeight': 1.6}),
                 html.Button(
