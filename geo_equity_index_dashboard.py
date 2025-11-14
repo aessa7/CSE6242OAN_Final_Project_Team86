@@ -639,10 +639,89 @@ print("="*60)
 
 # Define the app layout
 app.layout = html.Div([
+    # Welcome Modal
     html.Div([
-        html.H1("Geo-Equity Index: \n \
+        html.Div([
+            html.Div([
+                html.H2("Welcome to the Geo-Equity Index", style={'color': '#2c3e50', 'marginBottom': 20}),
+                html.P([
+                    "Welcome to the Geo-Equity Index—a comprehensive tool that aggregates data from the ",
+                    html.Strong("Environmental Protection Agency (EPA)"), ", ",
+                    html.Strong("Center for Disease Control (CDC)"), ", the ",
+                    html.Strong("U.S. Census Bureau"), 
+                    ", and other authoritative sources to generate a singular health score for your neighborhood. ",
+                    "The GEI score, rated from ",
+                    html.Strong("0 to 1"),
+                    ", provides an at-a-glance assessment of environmental and socioeconomic health factors in your area."
+                ], style={'marginBottom': 15, 'lineHeight': 1.6}),
+                html.P([
+                    "The tool also incorporates hazardous sites as defined by the EPA's ",
+                    html.Strong("Cleanup In My Community (CIMC)"),
+                    " program, with each site ranked on a scale of ",
+                    html.Strong("1 to 6"),
+                    " for hazard severity. Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
+                ], style={'marginBottom': 20, 'lineHeight': 1.6}),
+                html.Button(
+                    'Get Started',
+                    id='close-modal',
+                    n_clicks=0,
+                    style={
+                        'backgroundColor': '#3498db',
+                        'color': 'white',
+                        'padding': '12px 30px',
+                        'fontSize': 16,
+                        'border': 'none',
+                        'borderRadius': 5,
+                        'cursor': 'pointer',
+                        'width': '100%'
+                    }
+                )
+            ], style={
+                'backgroundColor': 'white',
+                'padding': 40,
+                'borderRadius': 10,
+                'maxWidth': 700,
+                'margin': '0 auto',
+                'boxShadow': '0 4px 6px rgba(0,0,0,0.1)'
+            })
+        ], id='welcome-modal', style={
+            'position': 'fixed',
+            'top': 0,
+            'left': 0,
+            'width': '100%',
+            'height': '100%',
+            'backgroundColor': 'rgba(0,0,0,0.5)',
+            'zIndex': 9999,
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'center',
+            'padding': 20
+        })
+    ], id='modal-container'),
+    
+    html.Div([
+        # Header with About button
+        html.Div([
+            html.H1("Geo-Equity Index: \n \
        An Interactive Environmental & Socioeconomic Health Risk Mapping Tool",
-                style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': 30}),
+                    style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': 10, 'display': 'inline-block', 'width': '100%'}),
+            html.Div([
+                html.Button(
+                    'ℹ️ Learn More',
+                    id='about-button',
+                    n_clicks=0,
+                    style={
+                        'backgroundColor': '#95a5a6',
+                        'color': 'white',
+                        'padding': '8px 20px',
+                        'fontSize': 14,
+                        'border': 'none',
+                        'borderRadius': 5,
+                        'cursor': 'pointer'
+                    }
+                )
+            ], style={'textAlign': 'center', 'marginBottom': 20})
+        ]),
         
         # Input controls
         html.Div([
@@ -753,6 +832,31 @@ app.layout = html.Div([
         
     ], style={'padding': 20, 'maxWidth': 1800, 'margin': '0 auto'})
 ])
+
+# Callback for modal control
+@app.callback(
+    Output('modal-container', 'style'),
+    [Input('close-modal', 'n_clicks'),
+     Input('about-button', 'n_clicks')],
+    prevent_initial_call=False
+)
+def toggle_modal(close_clicks, about_clicks):
+    ctx = callback_context
+    
+    if not ctx.triggered:
+        # Show modal on initial load
+        return {'display': 'block'}
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'close-modal':
+        # Hide modal
+        return {'display': 'none'}
+    elif button_id == 'about-button':
+        # Show modal
+        return {'display': 'block'}
+    
+    return {'display': 'none'}
 
 # Callback for updating the map
 @app.callback(
