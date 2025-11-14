@@ -1,6 +1,6 @@
 # Geo-Equity Index: An Interactive Environmental & Socioeconomic Health Risk Mapping Tool
 
-A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores and CIMC sites with hazard scores within a specified radius of an address.
+A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores with details and CIMC sites with hazard scores within a specified radius of an address.
 
 ## Overview
 
