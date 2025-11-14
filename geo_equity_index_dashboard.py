@@ -23,6 +23,7 @@ app.title = "Geo-Equity Index: An Interactive Environmental & Socioeconomic Heal
 # Global variables
 cimc_data = None
 census_tracts_gdf = None  # GeoDataFrame for census tracts
+top_features_df = None  # DataFrame for top 10 features by domain
 geolocator = Nominatim(user_agent="geoequity_index_dashboard")
 hazard_score_min = None
 hazard_score_max = None
@@ -102,6 +103,24 @@ def load_census_tracts():
         traceback.print_exc()
         return False
 
+def load_top_features():
+    """Load top 10 features by domain"""
+    global top_features_df
+    try:
+        filename = 'data/GEI_top10_features_2025-11-11.csv'
+        
+        if os.path.exists(filename):
+            top_features_df = pd.read_csv(filename)
+            print(f"✓ Loaded top features data: {len(top_features_df)} features")
+            return True
+        
+        print(f"⚠️  GEI_top10_features_2025-11-11.csv not found")
+        return False
+        
+    except Exception as e:
+        print(f"✗ Error loading top features: {e}")
+        return False
+
 def create_default_us_map():
     """Create a default map showing North America view"""
     # Default view: North America centered
@@ -173,6 +192,32 @@ def calculate_zoom_for_radius(radius_miles):
     else:
         return 6
 
+def wrap_text(text, width=40):
+    """Insert <br> line breaks to wrap long strings in Plotly hover text.
+    Keeps words intact and wraps at approximately `width` characters.
+    """
+    try:
+        if text is None:
+            return ""
+        s = str(text)
+        words = s.split(" ")
+        lines = []
+        current = ""
+        for w in words:
+            # +1 for space if current not empty
+            if len(current) + (1 if current else 0) + len(w) > width:
+                if current:
+                    lines.append(current)
+                current = w
+            else:
+                current = f"{current + ' ' if current else ''}{w}"
+        if current:
+            lines.append(current)
+        return "<br>".join(lines)
+    except Exception:
+        # Fallback: return original text if wrapping fails
+        return str(text) if text is not None else ""
+
 def get_coordinates(address):
     """Geocode an address to lat/lon with caching"""
     # Check cache first
@@ -214,10 +259,13 @@ def get_census_tract_info(lat, lon):
                 'geoid': tract.get('GEOID', 'N/A'),
                 'name': tract.get('NAME', 'N/A'),
                 'state': tract.get('STUSPS', 'N/A'),
-                'gei_score': tract.get('GEI_overall_score', 'N/A'),
+                'gei_overall_score': tract.get('GEI_overall_score', 'N/A'),
+                'gei_health_score': tract.get('GEI_health_score', 'N/A'),
+                'gei_socio_score': tract.get('GEI_socio_score', 'N/A'),
+                'gei_env_score': tract.get('GEI_env_score', 'N/A'),
             }
             
-            print(f"✓ Found census tract: GEOID={info['geoid']}, GEI={info['gei_score']}")
+            print(f"✓ Found census tract: GEOID={info['geoid']}, GEI={info['gei_overall_score']}")
             return info
         else:
             print(f"⚠️  No census tract found for point ({lat}, {lon})")
@@ -345,7 +393,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                     geojson=geojson_data,
                     locations=valid_tracts.index,
                     z=valid_tracts['GEI_overall_score'],
-                    colorscale='Blues',  # Light blue to dark blue gradient
+                    colorscale='RdYlGn',  #'Blues',  # Light blue to dark blue gradient
+                    reversescale=True, 
                     zmin=gei_min,  # Use full range from entire dataset (excluding -999)
                     zmax=gei_max,
                     marker_opacity=0.6,
@@ -356,7 +405,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                         thickness=15,
                         len=0.5,
                         x=1.05,
-                        y=0.5  # Align with CIMC colorbar top
+                        y=0.75  # Align with top of map
                     ),
                     hovertemplate='<b>Census Tract</b><br>' +
                                  'GEI_overall_score: %{z:.4f}<extra></extra>',
@@ -415,7 +464,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                 info_fields = ['Site_Name', 'Status', 'Type', 'Address', 'City', 'State']
                 for field in info_fields:
                     if field in point and pd.notna(point[field]):
-                        hover_text += f"<br>{field}: {point[field]}"
+                        value_wrapped = wrap_text(str(point[field]), 38)
+                        hover_text += f"<br>{field}: {value_wrapped}"
                 
                 cimc_lats.append(point_lat)
                 cimc_lons.append(point_lon)
@@ -426,6 +476,23 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         
         # Add CIMC points to map
         if cimc_lats:
+            # Underlay outline (slightly larger white circles) to create separation
+            fig.add_trace(go.Scattermap(
+                lat=cimc_lats,
+                lon=cimc_lons,
+                mode='markers',
+                name='CIMC Outline',
+                showlegend=False,
+                marker=dict(
+                    size=12,  # slightly larger than main points for a thin outline
+                    color='black',
+                    opacity=1.0,
+                    showscale=False
+                ),
+                hoverinfo='skip'
+            ))
+
+            # Main colored CIMC points on top
             fig.add_trace(go.Scattermap(
                 lat=cimc_lats,
                 lon=cimc_lons,
@@ -443,7 +510,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                         thickness=15,
                         len=0.5,
                         x=1.15,
-                        y=0.5  # Align with GEI colorbar
+                        y=0.75  # Align with top of map
                     ),
                     showscale=True
                 ),
@@ -458,32 +525,67 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     census_info = get_census_tract_info(lat, lon)
     
     # Build hover text with census tract info
-    hover_text = f"📍 Search Location<br>{formatted_address}"
+    # Wrap address: break after the first comma only and use a wider line width
+    hover_text = f"📍 Search Location<br>{wrap_text(formatted_address.replace(', ', ', <br>', 1), 50)}"
     if census_info:
         hover_text += f"<br><br><b>GEI Score Info:</b>"
         hover_text += f"<br>GEOID: {census_info['geoid']}"
         hover_text += f"<br>Name: {census_info['name']}"
         hover_text += f"<br>State: {census_info['state']}"
-        if census_info['gei_score'] != 'N/A':
-            hover_text += f"<br>GEI Score: {census_info['gei_score']:.4f}"
+        if census_info['gei_overall_score'] != 'N/A':
+            hover_text += f"<br>GEI Overall Score: {census_info['gei_overall_score']:.4f}"
         else:
-            hover_text += f"<br>GEI Score: {census_info['gei_score']}"
+            hover_text += f"<br>GEI Overall Score: {census_info['gei_overall_score']}"
     else:
         hover_text += "<br><br>⚠️ Census tract information not available"
     
+    # Bullseye effect: Add concentric circles (outer to inner)
+    # Outer ring (largest, most transparent)
     fig.add_trace(go.Scattermap(
         lat=[lat],
         lon=[lon],
-        mode='markers+text',  # Add text to make it even more visible
-        marker=dict(
-            size=20,  # Larger size
-            color='magenta',  # Bright magenta color to stand out
-            opacity=1.0,  # Full opacity
-            symbol='circle',  # Filled circle
-        ),
-        text=['📍'],  # Pin emoji as text
-        textfont=dict(size=30, color='red'),
-        textposition='top center',
+        mode='markers',
+        marker=dict(size=45, color='rgba(255,20,147,0.2)'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Middle ring
+    fig.add_trace(go.Scattermap(
+        lat=[lat],
+        lon=[lon],
+        mode='markers',
+        marker=dict(size=30, color='rgba(255,20,147,0.4)'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Inner ring
+    fig.add_trace(go.Scattermap(
+        lat=[lat],
+        lon=[lon],
+        mode='markers',
+        marker=dict(size=18, color='rgba(255,20,147,0.6)'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Center marker with hot pink ring (with hover info)
+    fig.add_trace(go.Scattermap(
+        lat=[lat],
+        lon=[lon],
+        mode='markers',
+        marker=dict(size=10, color='hotpink'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Center dot (with hover info)
+    fig.add_trace(go.Scattermap(
+        lat=[lat],
+        lon=[lon],
+        mode='markers',
+        marker=dict(size=6, color='deeppink'),
         hovertext=[hover_text],
         hoverinfo='text',
         name='Search Address',
@@ -519,7 +621,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         )
     )
     
-    return fig, formatted_address, cimc_count
+    return fig, formatted_address, cimc_count, census_info
 
 # Load data on startup
 print("="*60)
@@ -527,6 +629,7 @@ print("LOADING DATA AT STARTUP")
 print("="*60)
 data_loaded = load_cimc_data()
 census_loaded = load_census_tracts()
+top_features_loaded = load_top_features()
 print("="*60)
 
 # Define the app layout
@@ -612,15 +715,31 @@ app.layout = html.Div([
             )
         ], style={'width': '300px', 'marginLeft': 'auto', 'marginRight': '250px', 'marginTop': 10, 'marginBottom': 10}),
         
-        # Map
+        # Map and GEI Score Box Container
         html.Div([
-            dcc.Graph(
-                id='cimc-map', 
-                figure=create_default_us_map(), 
-                style={'height': '1000px', 'overflow': 'hidden'},
-                config={'responsive': True, 'displayModeBar': True}
-            )
-        ], style={'marginBottom': 20, 'position': 'relative', 'overflow': 'hidden'}),
+            # Map with GEI box positioned inside
+            html.Div([
+                dcc.Graph(
+                    id='cimc-map', 
+                    figure=create_default_us_map(), 
+                    style={'height': '1000px', 'overflow': 'hidden'},
+                    config={'responsive': True, 'displayModeBar': True}
+                ),
+                # GEI Score Information Box (positioned inside map's right margin)
+                html.Div(id='gei-info-box', style={
+                    'position': 'absolute',
+                    'right': '220px',
+                    'top': '580px',
+                    'padding': 15,
+                    'backgroundColor': '#e3f2fd',
+                    'border': '2px solid #2196f3',
+                    'borderRadius': 10,
+                    'width': '250px',
+                    'zIndex': 1000,
+                    'display': 'none'  # Hidden by default
+                })
+            ], style={'width': '1650px', 'position': 'relative', 'display': 'inline-block', 'verticalAlign': 'top'})
+        ], style={'marginBottom': 20, 'position': 'relative'}),
         
         # Data info
         html.Div([
@@ -628,7 +747,7 @@ app.layout = html.Div([
             html.Div(id='data-info')
         ], style={'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5}),
         
-        # Map parameters info box (temporary for debugging)
+        # Map parameters info box 
         html.Div(id='map-params-info', style={
             'marginTop': 20,
             'padding': 10, 
@@ -687,7 +806,9 @@ def display_live_map_params(relayout_data):
 @app.callback(
     [Output('cimc-map', 'figure'),
      Output('status-message', 'children'),
-     Output('data-info', 'children')],
+     Output('data-info', 'children'),
+     Output('gei-info-box', 'children'),
+     Output('gei-info-box', 'style')],
     [Input('search-button', 'n_clicks'),
      Input('address-input', 'n_submit'),  # Trigger on Enter key press
      Input('cimc-map', 'id'),  # Trigger on page load
@@ -701,19 +822,19 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
             html.P("❌ CIMC_Brownfield_Final.csv not found in current directory", 
                    style={'color': 'red', 'fontWeight': 'bold'}),
             html.P("Please ensure the file is in the same folder as this dashboard.")
-        ]), ""
+        ]), "", "", {'display': 'none'}
     
     if not address or not address.strip():
         # Return default US map when no address is entered
         default_map = create_default_us_map()
         return default_map, html.P("Enter an address to search for CIMC sites", 
-                                   style={'color': '#3498db', 'fontSize': 16}), ""
+                                   style={'color': '#3498db', 'fontSize': 16}), "", "", {'display': 'none'}
     
     # Validate inputs
     radius = max(0, min(25, radius or 10))
     
     try:
-        fig, formatted_address, cimc_count = create_map_figure(
+        fig, formatted_address, cimc_count, census_info = create_map_figure(
             address.strip(), 
             radius, 
             use_light_basemap=map_style
@@ -732,22 +853,76 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                 'detailed': 'Detailed'
             }.get(map_style, map_style)
             
-            data_info = html.Div([
-                html.P(f"Total CIMC records in database: {len(cimc_data) if cimc_data is not None else 0}"),
-                html.P(f"Sites found within search radius: {cimc_count}"),
-                html.P(f"Search radius: {radius} miles"),
-                html.P(f"Map style: {map_style_label}", 
-                       style={'fontStyle': 'italic', 'color': '#666'})
-            ])
+            # Create Data Info with Top 10 Features
+            if top_features_df is not None:
+                # Create sections for each domain
+                domain_sections = []
+                for domain in ['Health', 'Socioeconomic', 'Environment']:
+                    domain_features = top_features_df[top_features_df['Domain'] == domain].sort_values('Rank')
+                    
+                    if len(domain_features) > 0:
+                        feature_list = []
+                        for _, row in domain_features.iterrows():
+                            feature_list.append(html.Li(f"{row['Label']}", style={'marginBottom': 5}))
+                        
+                        domain_sections.append(html.Div([
+                            html.H5(f"{domain} Domain - Top 10 Features", style={'color': '#2c3e50', 'marginTop': 15, 'marginBottom': 10}),
+                            html.Ol(feature_list, style={'paddingLeft': 20})
+                        ]))
+                
+                data_info = html.Div(domain_sections)
+            else:
+                data_info = html.P("Top features data not available", style={'color': '#999', 'fontStyle': 'italic'})
+            
+            # Create GEI info box
+            if census_info:
+                gei_box = html.Div([
+                    html.H4("📊 GEI Scores for Search Location", style={'textAlign': 'center', 'color': '#1976d2', 'marginBottom': 15}),
+                    html.Div([
+                        html.Div([
+                            html.Strong("GEI Overall Score: "),
+                            html.Span(f"{census_info['gei_overall_score']:.4f}" if census_info['gei_overall_score'] != 'N/A' else 'N/A')
+                        ], style={'marginBottom': 8, 'fontSize': 15}),
+                        html.Div([
+                            html.Strong("GEI Health Score: "),
+                            html.Span(f"{census_info['gei_health_score']:.4f}" if census_info['gei_health_score'] != 'N/A' else 'N/A')
+                        ], style={'marginBottom': 8, 'fontSize': 15}),
+                        html.Div([
+                            html.Strong("GEI Socio Score: "),
+                            html.Span(f"{census_info['gei_socio_score']:.4f}" if census_info['gei_socio_score'] != 'N/A' else 'N/A')
+                        ], style={'marginBottom': 8, 'fontSize': 15}),
+                        html.Div([
+                            html.Strong("GEI Environmental Score: "),
+                            html.Span(f"{census_info['gei_env_score']:.4f}" if census_info['gei_env_score'] != 'N/A' else 'N/A')
+                        ], style={'fontSize': 15})
+                    ])
+                ])
+                gei_box_style = {
+                    'position': 'absolute',
+                    'right': '210px',
+                    'top': '580px',
+                    'padding': 15,
+                    'backgroundColor': '#e3f2fd',
+                    'border': '2px solid #2196f3',
+                    'borderRadius': 10,
+                    'width': '250px',
+                    'zIndex': 1000,
+                    'display': 'block'  # Show when data is available
+                }
+            else:
+                gei_box = ""
+                gei_box_style = {'display': 'none'}  # Hide when no data
         else:
             status_msg = html.P("❌ Address not found", style={'color': 'red'})
             data_info = ""
+            gei_box = ""
+            gei_box_style = {'display': 'none'}
             
-        return fig, status_msg, data_info
+        return fig, status_msg, data_info, gei_box, gei_box_style
         
     except Exception as e:
         error_msg = html.P(f"❌ Error: {str(e)}", style={'color': 'red'})
-        return go.Figure(), error_msg, ""
+        return go.Figure(), error_msg, "", "", {'display': 'none'}
 
 # Server configuration
 server = app.server  # Expose the server for deployment
@@ -766,6 +941,11 @@ if __name__ == '__main__':
         print(f"✅ Census tract data ready")
     else:
         print("⚠️  No census tract data loaded")
+    
+    if top_features_loaded:
+        print(f"✅ Top features data ready")
+    else:
+        print("⚠️  No top features data loaded")
     
     print("\n🌐 Starting dashboard server...")
     print("📱 Local: http://127.0.0.1:8050")
