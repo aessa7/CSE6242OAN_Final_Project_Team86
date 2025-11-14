@@ -659,7 +659,8 @@ app.layout = html.Div([
                     html.Strong("Cleanup In My Community (CIMC)"),
                     " program, with each site ranked on a scale of ",
                     html.Strong("1 (best) to 6 (worst)"),
-                    " for hazard severity. Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
+                    " for hazard severity.<br>",
+                    " Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
                 ], style={'marginBottom': 20, 'lineHeight': 1.6}),
                 html.Button(
                     'Get Started',

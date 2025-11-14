@@ -7,7 +7,8 @@ A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores with det
 Welcome to the Geo-Equity Index—a comprehensive tool that aggregates data from the Environmenal Protection Agency (EPA), Center for Disease Control (CDC), the U.S. Census Bureau, and other authoritative sources to generate a singular health score for your neighborhood. \
 The GEI score, rated from 0 (best) to 1(worst), provides an at-a-glance assessment of environmental and socioeconomic health factors in your area.
 
-The tool also incorporates hazardous sites as defined by the EPA's Cleanup In My Community (CIMC) program, with each site ranked on a scale of 1 to 6 (worst) for hazard severity. Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics.
+The tool also incorporates hazardous sites as defined by the EPA's Cleanup In My Community (CIMC) program, with each site ranked on a scale of 1 to 6 (worst) for hazard severity. \
+Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics.
 
 ## Features
 
