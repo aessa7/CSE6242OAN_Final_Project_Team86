@@ -743,70 +743,19 @@ app.layout = html.Div([
         
         # Data info
         html.Div([
-            html.H3("Data Information"),
+            html.H3("GEI Score Feature Details", style={'textAlign': 'center', 'color': '#2c3e50'}),
             html.Div(id='data-info')
-        ], style={'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5}),
-        
-        # Map parameters info box 
-        html.Div(id='map-params-info', style={
-            'marginTop': 20,
-            'padding': 10, 
-            'backgroundColor': '#fff3cd', 
-            'border': '1px solid #ffc107',
-            'borderRadius': 5,
-            'fontFamily': 'monospace',
-            'fontSize': 12
-        })
+        ], id='data-info-container', style={'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'none'})
         
     ], style={'padding': 20, 'maxWidth': 1800, 'margin': '0 auto'})
 ])
-
-# Callback for live map parameters display
-@app.callback(
-    Output('map-params-info', 'children'),
-    Input('cimc-map', 'relayoutData')
-)
-def display_live_map_params(relayout_data):
-    if relayout_data is None:
-        return "🗺️ Map Parameters: Move or zoom the map to see current settings"
-    
-    # Extract center and zoom from relayout data
-    info_parts = []
-    
-    # Check for map.center (this is the correct key for Scattermap)
-    if 'map.center' in relayout_data:
-        center = relayout_data['map.center']
-        if isinstance(center, dict):
-            lat = center.get('lat')
-            lon = center.get('lon')
-            if lat is not None:
-                info_parts.append(f"Center Lat: {lat:.4f}")
-            if lon is not None:
-                info_parts.append(f"Center Lon: {lon:.4f}")
-    
-    # Check for map.zoom
-    if 'map.zoom' in relayout_data:
-        zoom = relayout_data['map.zoom']
-        info_parts.append(f"Zoom: {zoom:.2f}")
-    
-    if info_parts:
-        return html.Div([
-            html.Strong("🗺️ Current Map View: ", style={'color': '#2c3e50'}),
-            html.Span(" | ".join(info_parts), style={'fontFamily': 'monospace', 'fontSize': '14px', 'color': '#27ae60'})
-        ])
-    else:
-        # Show all available keys for debugging
-        return html.Div([
-            html.Strong("🗺️ Map Data: ", style={'color': '#2c3e50'}),
-            html.Span(f"Keys detected: {', '.join(str(k) for k in relayout_data.keys())}", 
-                     style={'fontSize': '12px', 'fontStyle': 'italic'})
-        ])
 
 # Callback for updating the map
 @app.callback(
     [Output('cimc-map', 'figure'),
      Output('status-message', 'children'),
      Output('data-info', 'children'),
+     Output('data-info-container', 'style'),
      Output('gei-info-box', 'children'),
      Output('gei-info-box', 'style')],
     [Input('search-button', 'n_clicks'),
@@ -822,13 +771,13 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
             html.P("❌ CIMC_Brownfield_Final.csv not found in current directory", 
                    style={'color': 'red', 'fontWeight': 'bold'}),
             html.P("Please ensure the file is in the same folder as this dashboard.")
-        ]), "", "", {'display': 'none'}
+        ]), "", {'display': 'none'}, "", {'display': 'none'}
     
     if not address or not address.strip():
         # Return default US map when no address is entered
         default_map = create_default_us_map()
         return default_map, html.P("Enter an address to search for CIMC sites", 
-                                   style={'color': '#3498db', 'fontSize': 16}), "", "", {'display': 'none'}
+                                   style={'color': '#3498db', 'fontSize': 16}), "", {'display': 'none'}, "", {'display': 'none'}
     
     # Validate inputs
     radius = max(0, min(25, radius or 10))
@@ -853,26 +802,110 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                 'detailed': 'Detailed'
             }.get(map_style, map_style)
             
-            # Create Data Info with Top 10 Features
-            if top_features_df is not None:
-                # Create sections for each domain
-                domain_sections = []
-                for domain in ['Health', 'Socioeconomic', 'Environment']:
-                    domain_features = top_features_df[top_features_df['Domain'] == domain].sort_values('Rank')
-                    
-                    if len(domain_features) > 0:
-                        feature_list = []
-                        for _, row in domain_features.iterrows():
-                            feature_list.append(html.Li(f"{row['Label']}", style={'marginBottom': 5}))
-                        
-                        domain_sections.append(html.Div([
-                            html.H5(f"{domain} Domain - Top 10 Features", style={'color': '#2c3e50', 'marginTop': 15, 'marginBottom': 10}),
-                            html.Ol(feature_list, style={'paddingLeft': 20})
-                        ]))
+            # Create Data Info with Top 10 Features and their values from census tract
+            if top_features_df is not None and census_info is not None:
+                # Get the census tract data for the address
+                lat, lon, _ = get_coordinates(address.strip())
+                point = Point(lon, lat)
+                containing_tracts = census_tracts_gdf[census_tracts_gdf.geometry.contains(point)]
                 
-                data_info = html.Div(domain_sections)
+                if len(containing_tracts) > 0:
+                    tract_data = containing_tracts.iloc[0]
+                    
+                    # Create sections for each domain
+                    domain_sections = []
+                    for domain in ['Health', 'Socioeconomic', 'Environment']:
+                        domain_features = top_features_df[top_features_df['Domain'] == domain].sort_values('Rank')
+                        
+                        if len(domain_features) > 0:
+                            # Create table rows
+                            table_rows = []
+                            
+                            # Add header row
+                            table_rows.append(html.Tr([
+                                html.Th("Feature", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'left'}),
+                                html.Th("Raw Value", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'right'}),
+                                html.Th("Percentile", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'right'})
+                            ]))
+                            
+                            for _, row in domain_features.iterrows():
+                                feature_name = row['Feature']
+                                feature_label = row['Label']
+                                pctl_feature_name = f"pctl_{feature_name}"
+                                
+                                # Get the raw value from the tract data
+                                value_str = "N/A"
+                                if feature_name in tract_data.index:
+                                    feature_value = tract_data[feature_name]
+                                    # Format the value nicely
+                                    if pd.notna(feature_value):
+                                        if isinstance(feature_value, (int, np.integer)):
+                                            value_str = f"{feature_value:,}"
+                                        elif isinstance(feature_value, (float, np.floating)):
+                                            if feature_value == -999:
+                                                value_str = "N/A"
+                                            else:
+                                                value_str = f"{feature_value:.4f}"
+                                        else:
+                                            value_str = str(feature_value)
+                                    else:
+                                        value_str = "N/A"
+                                
+                                # Get the percentile value
+                                pctl_str = "N/A"
+                                if pctl_feature_name in tract_data.index:
+                                    pctl_value = tract_data[pctl_feature_name]
+                                    if pd.notna(pctl_value):
+                                        if isinstance(pctl_value, (int, np.integer)):
+                                            pctl_str = f"{pctl_value:,}"
+                                        elif isinstance(pctl_value, (float, np.floating)):
+                                            if pctl_value == -999:
+                                                pctl_str = "N/A"
+                                            else:
+                                                pctl_str = f"{pctl_value:.4f}"
+                                        else:
+                                            pctl_str = str(pctl_value)
+                                    else:
+                                        pctl_str = "N/A"
+                                
+                                # Add table row
+                                table_rows.append(html.Tr([
+                                    html.Td(feature_label, style={'padding': '8px', 'borderBottom': '1px solid #ddd'}),
+                                    html.Td(value_str, style={'padding': '8px', 'borderBottom': '1px solid #ddd', 'textAlign': 'right'}),
+                                    html.Td(pctl_str, style={'padding': '8px', 'borderBottom': '1px solid #ddd', 'textAlign': 'right'})
+                                ]))
+                            
+                            # Create table
+                            feature_table = html.Table(
+                                table_rows,
+                                style={
+                                    'width': '100%',
+                                    'borderCollapse': 'collapse',
+                                    'marginTop': '10px',
+                                    'backgroundColor': 'white'
+                                }
+                            )
+                            
+                            domain_sections.append(html.Div([
+                                html.H5(f"{domain} Domain - Top 10 Features", 
+                                       style={'color': '#00008B', 'fontWeight': 'bold', 'fontSize': '20px', 'marginTop': 15, 'marginBottom': 10}),
+                                feature_table
+                            ]))
+                    
+                    data_info = html.Div(domain_sections)
+                    data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
+                else:
+                    data_info = html.P("Census tract not found for this address", 
+                                     style={'color': '#999', 'fontStyle': 'italic'})
+                    data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
+            elif top_features_df is not None:
+                data_info = html.P("Census tract data not available for feature values", 
+                                 style={'color': '#999', 'fontStyle': 'italic'})
+                data_info_style = {'marginTop': 30, 'padding': 20, 'backgroundColor': '#f8f9fa', 'borderRadius': 5, 'display': 'block'}
             else:
-                data_info = html.P("Top features data not available", style={'color': '#999', 'fontStyle': 'italic'})
+                data_info = html.P("Top features data not available", 
+                                 style={'color': '#999', 'fontStyle': 'italic'})
+                data_info_style = {'display': 'none'}
             
             # Create GEI info box
             if census_info:
@@ -915,14 +948,15 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
         else:
             status_msg = html.P("❌ Address not found", style={'color': 'red'})
             data_info = ""
+            data_info_style = {'display': 'none'}
             gei_box = ""
             gei_box_style = {'display': 'none'}
             
-        return fig, status_msg, data_info, gei_box, gei_box_style
+        return fig, status_msg, data_info, data_info_style, gei_box, gei_box_style
         
     except Exception as e:
         error_msg = html.P(f"❌ Error: {str(e)}", style={'color': 'red'})
-        return go.Figure(), error_msg, "", "", {'display': 'none'}
+        return go.Figure(), error_msg, "", {'display': 'none'}, "", {'display': 'none'}
 
 # Server configuration
 server = app.server  # Expose the server for deployment
