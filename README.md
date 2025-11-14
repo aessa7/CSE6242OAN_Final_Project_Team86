@@ -4,26 +4,52 @@ A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores and CIMC
 
 ## Features
 
-- 🗺️ Interactive map visualization with census tract data (GEI scores) and CIMC sites (hazard scores)
-- 📍 Geocoding: Enter any address to search for nearby CIMC sites within a configurable radius
-- 📊 Real-time filtering: Adjust the search radius with a slider to dynamically update results
-- 🎨 Multiple basemap styles: Choose between no basemap (fastest), light, or detailed maps
-- 💾 Address geocoding cache: Repeated addresses are cached for instant lookups
-- 📈 Census Tract Info: Hover over the search location to see GEI score and census tract information
+- 🗺️ **Interactive Map Visualization**: 
+  - Census tract choropleth layer colored by GEI scores (Red-Yellow-Green gradient)
+  - CIMC sites displayed with hazard score-based color coding (Yellow-Orange-Red)
+  - Customizable search location marker with blue-to-magenta gradient bullseye effect
+  
+- 📍 **Smart Geocoding**: 
+  - Enter any address to search for nearby CIMC sites within a configurable radius
+  - Address geocoding cache for instant repeated lookups
+  
+- 📊 **Dynamic Data Display**:
+  - Adjustable search radius slider (0-25 miles) with real-time map updates
+  - GEI Score box showing Overall, Health, Socio, and Environmental scores for search location
+  - Top 10 Features table by domain (Health, Socioeconomic, Environment) with raw values and percentiles
+  
+- 🎨 **Flexible Basemap Styles**: 
+  - No Basemap (fastest - white background)
+  - Light (fast - minimal streets)
+  - Detailed (slowest - full street detail)
+  
+- 🔗 **Enhanced CIMC Site Information**:
+  - Hover tooltips showing site details, hazard scores, and distance from search location
+  - Clickable URLs to view full site information in new tab
+  
+- 📈 **Census Tract Intelligence**: 
+  - Hover over search location to see GEI scores and census tract metadata
+  - Automatic detection of census tract containing the search address
+  - Feature values extracted directly from shapefile data
 
 ## Data Requirements
 
-The application requires two data files in the `data/` directory:
+The application requires three data files in the `data/` directory:
 
 1. **CIMC_Sites_Hazard_Score.csv** - CSV file with CIMC site locations and hazard scores
    - Required columns: `LATITUDE`, `LONGITUDE`, `Hazard_Score`
-   - Optional columns: `Site_Name`, `Status`, `Type`, `Address`, `City`, `State`
+   - Optional columns: `Site_Name`, `Status`, `Type`, `Address`, `City`, `State`, `URL`
 
-2. **census_tracts_with_gei.gpkg** - GeoPackage with census tract data and GEI scores
-   - Required columns: `GEI_overall_score` (overall GEI score)
+2. **census_tracts_with_gei.gpkg** - GeoPackage with census tract data and GEI scores (stored with Git LFS)
+   - Required columns: `GEI_overall_score`, `GEI_health_score`, `GEI_socio_score`, `GEI_env_score`
    - Additional columns: `GEOID`, `NAME`, `STUSPS` (state code)
-   - GeoPackage format is optimized for fast loading of large spatial datasets
-   - Alternative: `census_tracts_with_gei.geojson` (if GeoPackage unavailable, but slower)
+   - Feature columns with `pctl_` prefix for percentile values
+   - GeoPackage format is optimized for fast loading of large spatial datasets (173 MB)
+   - Managed via Git LFS for efficient repository storage
+
+3. **GEI_top10_features_2025-11-11.csv** - Top 10 features by domain
+   - Required columns: `Feature`, `Label`, `Domain`, `Rank`
+   - Used to display feature-specific data for the search location
 
 ## Local Development
 
@@ -106,9 +132,27 @@ docker run -p 8050:8050 geiq-dashboard:latest
 ## Performance Tips
 
 - **Data Loading**: GeoPackage format (.gpkg) is used for fast census tract loading (~173 MB, loads in <30 seconds)
-- **Basemap Selection**: Use "No Basemap" for instant address lookups; "Light" is a good balance; "Detailed" is slowest but shows streets
-- **Geocoding Cache**: Addresses are cached in memory. For production, consider a Redis cache for multi-instance deployments
-- **Nominatim Rate Limits**: The app uses Nominatim (free geocoding). For high-traffic production apps, consider a paid geocoding API (Mapbox, Google Places)
+- **Git LFS**: Large data files are managed with Git LFS for efficient repository storage
+- **Basemap Selection**: 
+  - "No Basemap" - instant address lookups with just data markers
+  - "Light" - good balance of performance and map context
+  - "Detailed" - full street-level detail (slowest)
+- **Geocoding Cache**: Addresses are cached in memory for instant re-use
+- **Feature Display**: GEI feature details are dynamically loaded only when an address is searched
+- **Percentile Formatting**: Percentile values are automatically converted to 0-100 scale for easy interpretation
+- **Nominatim Rate Limits**: Uses Nominatim (free geocoding). For production, consider paid geocoding APIs (Mapbox, Google Places)
+
+## Recent Updates
+
+### Latest Features (January 2025)
+- ✅ Added Git LFS support for large GeoPackage file management
+- ✅ Implemented Top 10 Features table with raw values and percentiles by domain
+- ✅ Enhanced percentile display (converted to 0-100 scale, 2 decimal places)
+- ✅ Added clickable URLs for CIMC sites (opens in new tab)
+- ✅ Updated bullseye marker with blue-to-magenta gradient for better visibility
+- ✅ Conditional display of GEI Score Feature Details box (hidden when no data)
+- ✅ Improved table formatting with bold, dark blue headers (20px font)
+- ✅ Dynamic feature value extraction from census tract shapefile data
 
 ## Troubleshooting
 
@@ -154,12 +198,14 @@ CSE6242OAN_Final_Project/
 ├── Dockerfile                     # Docker image definition
 ├── Procfile                       # Procfile for deployment
 ├── .dockerignore                  # Files to exclude from Docker build
+├── .gitattributes                 # Git LFS tracking configuration
+├── .gitignore                     # Git ignore rules
 ├── README.md                      # This file
 └── data/
-    ├── CIMC_Sites_Hazard_Score.csv
-    ├── census_tracts_with_gei.gpkg        # Primary: GeoPackage (fast)
-    ├── census_tracts_with_gei.geojson     # Alternative: GeoJSON (slower)
-    ├── census_tracts_with_gei.shp         # Original shapefile components
+    ├── CIMC_Sites_Hazard_Score.csv          # CIMC site locations and hazard scores
+    ├── census_tracts_with_gei.gpkg          # Census tracts with GEI (Git LFS)
+    ├── GEI_top10_features_2025-11-11.csv    # Top 10 features by domain
+    ├── census_tracts_with_gei.shp           # Original shapefile components
     ├── census_tracts_with_gei.shx
     ├── census_tracts_with_gei.dbf
     ├── census_tracts_with_gei.prj
