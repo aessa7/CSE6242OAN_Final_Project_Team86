@@ -1,0 +1,31 @@
+Feature,Label,Domain,Rank
+E_MHLTH,Percentage of individuals reporting not good mental health,Health,1
+Current Lack of Health Insurance,"Age-adjusted prevalence of adults 18-64 years who report having no current health insurance coverage, 2021.",Health,2
+Alcohol Abuse,"Age-adjusted prevalence of adults  who report having five or more drinks (men) or four or more drinks (women) on an occasion in the past 30 days, 2021.",Health,3
+Covid-19 Vaccination Rates,"Percentage of people who are fully COVID-19 vaccinated, April 20, 2022.",Health,4
+Proximity to Nursing Homes,"Proximity to nursing homes  (5km centroid radius), 2017.",Health,5
+E_ASTHMA,Percentage of individuals with asthma,Health,6
+Proximity to hospitals ,"Proximity to hospitals  (5km centroid radius), 2022.",Health,7
+Child Mortality,"Number of deaths among residents under age 18 per 100,000 population, 2017-2020.",Health,8
+E_DIABETES,Percentage of individuals with diabetes,Health,9
+Teen births,"Teen birth rates teen birth rates for age group 15-19 (expressed per 1,000 females aged 15-19)  averaged across the years 2016, 2017 and 2018.",Health,10
+Tax Base: Median Real Estate Taxes Paid,"Estimated median annual real estate taxes paid, between 2015-2019.",Socioeconomic,1
+Below Poverty,Percentile ranking of Percentage of persons below 150% poverty,Socioeconomic,2
+No Vehicle,Percentile ranking of percentage of households with no vehicle available ,Socioeconomic,3
+Percent of Household with no internet access,"Percent of Household with no internet access, 2013-2017.",Socioeconomic,4
+Gun Violence,"Firearm Fatalities per 100,000 population, 2014-2020.",Socioeconomic,5
+Single-Parent Households,Percentile ranking of Percentage of single-parent households with children under 18,Socioeconomic,6
+Homeless Population,"Population-adjusted estimates of homeless population, 2020.",Socioeconomic,7
+Residential Energy Cost Burden,"Low-income energy affordability data (LEAD) estimating average energy burden by income, 2018.",Socioeconomic,8
+Religious Organizations,"Number of religious organizations per 1,000 people, 2003-2017.",Socioeconomic,9
+Percent of Housing Units Built Between 1940-1969 as of 2015-2019,"Percent of Housing Units Built Between 1940-1969, 2016-2020.",Socioeconomic,10
+Deaths from climate disasters,"Count of total deaths from climate disasters, 1980-present.",Environment,1
+Brownfields,"Proximity to brownfield sites  (5km centroid radius), 2020.",Environment,2
+Increased PM2.5 mortality - CVD (ages 65+),"Increased PM2.5 mortality - CVD (ages 65+), 2021.",Environment,3
+E_HOUAGE,"The percentage of houses built before 1980, to estimate potential exposure to lead ",Environment,4
+Impermeable Surfaces,"Percent of developed imperviousness, 2021.",Environment,5
+FEMA Hazard Mitigation Grants ,"Total FEMA spending per 100,000 people, 1981-2020.",Environment,6
+Surface PM2.5,"Surface PM2.5 in ug/m3, 2021.",Environment,7
+Property taxes expected to be lost by 2045 due to chronic inundation ,"Property taxes expected to be lost by 2045 due to chronic inundation, 2020.",Environment,8
+High-Risk Jobs Productivity (% Change),"Percent change in high-risk jobs productivity, 2017.",Environment,9
+E_RAIL,The proportion of the census tract within a 1-mi buffer of a railway ,Environment,10
