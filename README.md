@@ -198,11 +198,6 @@ CSE6242OAN_Final_Project/
     ├── CIMC_Sites_Hazard_Score.csv          # CIMC site locations and hazard scores
     ├── census_tracts_with_gei.gpkg          # Census tracts with GEI (Git LFS)
     ├── GEI_top10_features_2025-11-11.csv    # Top 10 features by domain
-    ├── census_tracts_with_gei.shp           # Original shapefile components
-    ├── census_tracts_with_gei.shx
-    ├── census_tracts_with_gei.dbf
-    ├── census_tracts_with_gei.prj
-    └── census_tracts_with_gei.cpg
 ```
 
 ## License

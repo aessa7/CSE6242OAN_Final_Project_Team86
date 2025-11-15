@@ -622,8 +622,10 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             bgcolor="white",  # White background
             bordercolor="black",  # Black border
             font=dict(color="black", size=13),  # Black text
-            namelength=-1  # Show full text
-        )
+            namelength=-1,  # Show full text
+            align="left"  # Left align text for better readability
+        ),
+        hovermode='closest'  # Keep tooltip visible on closest element
     )
     
     return fig, formatted_address, cimc_count, census_info
@@ -659,7 +661,7 @@ app.layout = html.Div([
                     html.Strong("Cleanup In My Community (CIMC)"),
                     " program, with each site ranked on a scale of ",
                     html.Strong("0 to 6 (most severe)"),
-                    " for hazard severity.<br>",
+                    " for hazard severity.",
                     " Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
                 ], style={'marginBottom': 20, 'lineHeight': 1.6}),
                 html.Button(
