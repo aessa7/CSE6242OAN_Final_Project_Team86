@@ -562,9 +562,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         mode='markers',
         marker=dict(size=30, color='rgba(138,43,226,0.5)'),
         showlegend=False,
-        hoverinfo='skip'Your branch is ahead of 'origin/main' by 1 commit.
-  (use "git push" to publish your local commits)Your branch is ahead of 'origin/main' by 1 commit.
-  (use "git push" to publish your local commits)
+        hoverinfo='skip'
     ))
     
     # Inner ring
