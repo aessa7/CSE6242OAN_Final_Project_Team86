@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The Geo-Equity Index Dashboard represents a comprehensive interactive geospatial visualization platform that synthesizes environmental, health, and socioeconomic data into an accessible web-based interface. Built entirely in Python using the Dash framework and Plotly visualization library, the application enables users to explore neighborhood-level health risk scores while simultaneously viewing nearby EPA-designated hazardous sites. This document provides a non-technical overview of the visualization strategies, design innovations, and implementation challenges encountered during development.
+The Geo-Equity Index Dashboard represents a comprehensive interactive geospatial visualization platform that synthesizes environmental, health, and socioeconomic data into an accessible web-based interface. Built entirely in Python using the Dash framework and Plotly visualization library, the application enables users to explore neighborhood-level health risk scores while simultaneously viewing nearby EPA-designated hazardous sites. This document provides an overview of the visualization strategies, design innovations, and implementation challenges encountered during development.
 
 ---
 
@@ -202,18 +202,40 @@ However, due to project time constraints and the learning curve associated with 
 
 ## Conclusion
 
-The Geo-Equity Index Dashboard successfully demonstrates that complex geospatial visualization applications can be built using pure Python toolchains, enabling data science teams to develop interactive web applications without full-stack web development expertise. The dashboard effectively communicates multi-dimensional health risk data through layered choropleth mapping, interactive filtering, and context-sensitive information displays.
+This work demonstrates that Python-based frameworks can successfully support complex geospatial visualization applications without requiring multi-language development expertise. The Geo-Equity Index Dashboard leverages Plotly and Dash to communicate multi-dimensional environmental health risk data through layered choropleth representations, dynamic filtering mechanisms, and context-aware information displays. 
 
-However, the implementation exposed inherent limitations in adapting general-purpose visualization libraries for specialized geospatial applications. Workarounds for hover text formatting, click event handling, and information panel positioning reveal gaps where Plotly's abstractions do not fully accommodate mapping-specific requirements. Performance challenges with large polygon datasets underscore the computational advantages of specialized mapping libraries employing vector tile architectures.
+Nevertheless, the implementation revealed limitations inherent to adapting general-purpose visualization libraries for specialized geospatial applications. Specific challenges emerged in three areas: hover text formatting, click event disambiguation, and spatial information panel positioning. These required custom workarounds that exposed gaps in Plotly's abstraction layer for mapping-specific requirements. Additionally, performance constraints with large polygon datasets (>10,000 features) highlighted computational tradeoffs compared to specialized mapping libraries employing vector tile architectures and progressive rendering strategies.
 
-For academic and prototyping contexts prioritizing development velocity and Python ecosystem integration, the Plotly/Dash approach represents an excellent choice. Production applications requiring mobile responsiveness, advanced cartographic controls, or datasets exceeding 10,000 geographic features might justify the additional complexity of specialized mapping libraries or hybrid architectures combining Python backends with JavaScript mapping frontends.
+The findings suggest that technology selection should align with application context and deployment requirements. For academic research and rapid prototyping where development velocity and Python ecosystem integration are prioritized, the Plotly/Dash framework provides an effective solution. However, production applications requiring mobile responsiveness, advanced cartographic interactions, or handling large-scale geographic datasets may benefit from specialized mapping libraries or hybrid architectures that combine Python-based data processing with JavaScript-based rendering frontends.
 
-The dashboard ultimately achieves its primary objective—making complex environmental and health equity data accessible to non-technical audiences through intuitive visual interfaces—while providing valuable lessons about the capabilities and constraints of Python-based geospatial visualization tools.
+
+---
+
+## Future Enhancements
+
+### Interactive Map Exploration
+
+A key enhancement under consideration involves enabling direct map interaction for location selection, moving beyond the current text-based address search to support more intuitive visual exploration.
+
+**Proposed Capabilities:**
+
+**Viewport-Based Exploration**: Users could pan and zoom freely across the map to explore different regions, with census tract data and CIMC sites loading dynamically based on the visible area. This would enable comparative regional analysis without requiring knowledge of specific addresses.
+
+**Pin Dropping**: Users could click anywhere on the map to drop a pin, instantly retrieving GEI scores and nearby hazardous sites for that exact location. This familiar interaction pattern would make the tool more accessible to users accustomed to consumer mapping applications.
+
+**Key Implementation Considerations:**
+
+- Reverse geocoding capability to convert map coordinates back to readable addresses
+- Map event detection to distinguish between pin-dropping clicks and other interactions
+- Dynamic data loading strategies to efficiently handle viewport changes
+- Draggable pins that update information in real-time as they are moved
+- Performance optimizations to maintain responsiveness with large datasets during zoom operations
+
+This enhancement would transform the dashboard from an address-centric tool into a map-centric exploration platform, enabling users to discover health equity patterns through visual browsing rather than targeted searches. Given the architectural complexity and performance considerations involved, this feature represents a logical next phase following validation of the current prototype with users.
 
 ---
 
 **Document Information:**
 - **Date:** November 15, 2025
 - **Project:** CSE 6242 Final Project - Team 86
-- **Focus:** Non-Technical Visualization Review
-- **Format:** Code-free narrative analysis
+- **Focus:** Visualization Review
