@@ -107,14 +107,14 @@ def load_top_features():
     """Load top 10 features by domain"""
     global top_features_df
     try:
-        filename = 'data/GEI_top10_features_2025-11-11.csv'
+        filename = 'data/GEI_top10_features_2025-11-14.csv'
         
         if os.path.exists(filename):
             top_features_df = pd.read_csv(filename)
             print(f"✓ Loaded top features data: {len(top_features_df)} features")
             return True
         
-        print(f"⚠️  GEI_top10_features_2025-11-11.csv not found")
+        print(f"⚠️  GEI_top10_features_2025-11-14.csv not found")
         return False
         
     except Exception as e:
@@ -150,7 +150,7 @@ def create_default_us_map():
         height=1000,  # Fixed height
         autosize=False,  # Prevent auto-resizing
         margin=dict(l=0, r=250, t=30, b=0),  # Match the margin for consistency
-        hoverdistance=100,  # Easier hover detection (100px radius)
+        hoverdistance=35,  # Easier hover detection (35px radius)
         # title="GEI Dashboard - Enter an address to search"
     )
     
@@ -450,7 +450,12 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                 point_lon = float(point[lon_col])
                 
                 # Create hover text
-                hover_text = f"CIMC Site<br>Distance: {point['distance_miles']:.1f} miles"
+                hover_text = f"CIMC Site:"
+                
+                # Add site name first
+                if 'PRIMARY_NAME' in point and pd.notna(point['PRIMARY_NAME']):
+                    site_name_wrapped = wrap_text(str(point['PRIMARY_NAME']), 38)
+                    hover_text += f"<br>Site Name: {site_name_wrapped}"
                 
                 # Add hazard score if available
                 if 'Hazard_Score' in point and pd.notna(point['Hazard_Score']):
@@ -460,17 +465,13 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                 else:
                     cimc_hazard_scores.append(None)
                 
-                # Add other available information
-                info_fields = ['Site_Name', 'Status', 'Type', 'Address', 'City', 'State']
-                for field in info_fields:
-                    if field in point and pd.notna(point[field]):
-                        value_wrapped = wrap_text(str(point[field]), 38)
-                        hover_text += f"<br>{field}: {value_wrapped}"
+               # Add a note telling users to click for more details
+                hover_text += f"<br><i>Click for more details</i>"
                 
-                # Add URL as a clickable link if available
-                if 'URL' in point and pd.notna(point['URL']):
-                    url = str(point['URL'])
-                    hover_text += f"<br>URL: <a href='{url}' target='_blank' style='color: #3498db;'>Go to URL</a>"
+                # # Add URL as a clickable link if available
+                # if 'URL' in point and pd.notna(point['URL']):
+                #     url = str(point['URL'])
+                #     hover_text += f"<br>URL: <a href='{url}' target='_blank' style='color: #3498db;'>Go to URL</a>"
                 
                 cimc_lats.append(point_lat)
                 cimc_lons.append(point_lon)
@@ -481,6 +482,9 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         
         # Add CIMC points to map
         if cimc_lats:
+            # Create customdata with lat/lon pairs for reliable click detection
+            cimc_customdata = [[lat, lon] for lat, lon in zip(cimc_lats, cimc_lons)]
+            
             # Underlay outline (slightly larger white circles) to create separation
             fig.add_trace(go.Scattermap(
                 lat=cimc_lats,
@@ -494,6 +498,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                     opacity=1.0,
                     showscale=False
                 ),
+                customdata=cimc_customdata,
                 hoverinfo='skip'
             ))
 
@@ -519,6 +524,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                     ),
                     showscale=True
                 ),
+                customdata=cimc_customdata,
                 text=cimc_texts,
                 hoverinfo='text'
             ))
@@ -625,10 +631,10 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             align="left"  # Left align text for better readability
         ),
         hovermode='closest',  # Keep tooltip visible on closest element
-        hoverdistance=100  # Easier hover detection (100px radius)
+        hoverdistance=35  # Easier hover detection (35px radius)
     )
     
-    return fig, formatted_address, cimc_count, census_info
+    return fig, formatted_address, cimc_count, census_info, nearby_cimc
 
 # Load data on startup
 print("="*60)
@@ -815,10 +821,23 @@ app.layout = html.Div([
                 html.Div(id='gei-info-box', style={
                     'position': 'absolute',
                     'right': '220px',
-                    'top': '580px',
-                    'padding': 15,
+                    'top': '570px',
+                    'padding': 10,
                     'backgroundColor': '#e3f2fd',
                     'border': '2px solid #2196f3',
+                    'borderRadius': 10,
+                    'width': '250px',
+                    'zIndex': 1000,
+                    'display': 'none'  # Hidden by default
+                }),
+                # CIMC Site Details Box (positioned below GEI box)
+                html.Div(id='cimc-details-box', style={
+                    'position': 'absolute',
+                    'right': '220px',
+                    'top': '750px',  # Below GEI box
+                    'padding': 10,
+                    'backgroundColor': '#fff3e0',
+                    'border': '2px solid #ff9800',
                     'borderRadius': 10,
                     'width': '250px',
                     'zIndex': 1000,
@@ -826,6 +845,12 @@ app.layout = html.Div([
                 })
             ], style={'width': '1650px', 'position': 'relative', 'display': 'inline-block', 'verticalAlign': 'top'})
         ], style={'marginBottom': 20, 'position': 'relative'}),
+        
+        # Hidden storage for CIMC data (for click callback)
+        dcc.Store(id='cimc-data-store', data=None),
+        
+        # Hidden close button for CIMC box (actual button rendered in callback)
+        html.Button(id='close-cimc-box', n_clicks=0, style={'display': 'none'}),
         
         # Data info
         html.Div([
@@ -868,7 +893,8 @@ def toggle_modal(close_clicks, about_clicks):
      Output('data-info', 'children'),
      Output('data-info-container', 'style'),
      Output('gei-info-box', 'children'),
-     Output('gei-info-box', 'style')],
+     Output('gei-info-box', 'style'),
+     Output('cimc-data-store', 'data')],
     [Input('search-button', 'n_clicks'),
      Input('address-input', 'n_submit'),  # Trigger on Enter key press
      Input('cimc-map', 'id'),  # Trigger on page load
@@ -882,23 +908,30 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
             html.P("❌ CIMC_Brownfield_Final.csv not found in current directory", 
                    style={'color': 'red', 'fontWeight': 'bold'}),
             html.P("Please ensure the file is in the same folder as this dashboard.")
-        ]), "", {'display': 'none'}, "", {'display': 'none'}
+        ]), "", {'display': 'none'}, "", {'display': 'none'}, None
     
     if not address or not address.strip():
         # Return default US map when no address is entered
         default_map = create_default_us_map()
-        return default_map, html.P("Enter an address to search for CIMC sites", 
-                                   style={'color': '#3498db', 'fontSize': 16}), "", {'display': 'none'}, "", {'display': 'none'}
+        return default_map, html.P("Enter an address to search for GEI Score and surrounding CIMC sites", 
+                                   style={'color': '#3498db', 'fontSize': 16}), "", {'display': 'none'}, "", {'display': 'none'}, None
     
     # Validate inputs
     radius = max(0, min(25, radius or 10))
     
     try:
-        fig, formatted_address, cimc_count, census_info = create_map_figure(
+        fig, formatted_address, cimc_count, census_info, nearby_cimc = create_map_figure(
             address.strip(), 
             radius, 
             use_light_basemap=map_style
         )
+        
+        # Prepare CIMC data for storage (for click callback)
+        cimc_store_data = None
+        if nearby_cimc is not None and len(nearby_cimc) > 0:
+            # Store as list of dicts with relevant fields
+            cimc_store_data = nearby_cimc[['LATITUDE', 'LONGITUDE', 'PRIMARY_NAME', 'Hazard_Category', 
+                                           'Hazard_Score', 'distance_miles', 'URL']].to_dict('records')
         
         # Create Data Info with Top 10 Features and their values from census tract
         if top_features_df is not None and census_info is not None:
@@ -1008,7 +1041,7 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
         # Create GEI info box
         if census_info:
                 gei_box = html.Div([
-                    html.H4("📊 GEI Scores for Search Location", style={'textAlign': 'center', 'color': '#1976d2', 'marginBottom': 15}),
+                    html.H4("📊 GEI Scores for Search Location", style={'textAlign': 'center', 'color': '#1976d2', 'marginTop': 0, 'marginBottom': 10}),
                     html.Div([
                         html.Div([
                             html.Strong("GEI Overall Score: "),
@@ -1030,9 +1063,9 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                 ])
                 gei_box_style = {
                     'position': 'absolute',
-                    'right': '210px',
-                    'top': '580px',
-                    'padding': 15,
+                    'right': '220px',
+                    'top': '570px',
+                    'padding': 10,
                     'backgroundColor': '#e3f2fd',
                     'border': '2px solid #2196f3',
                     'borderRadius': 10,
@@ -1044,11 +1077,149 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
             gei_box = ""
             gei_box_style = {'display': 'none'}  # Hide when no data
             
-        return fig, "", data_info, data_info_style, gei_box, gei_box_style
+        return fig, "", data_info, data_info_style, gei_box, gei_box_style, cimc_store_data
         
     except Exception as e:
         error_msg = html.P(f"❌ Error: {str(e)}", style={'color': 'red'})
-        return go.Figure(), error_msg, "", {'display': 'none'}, "", {'display': 'none'}
+        return go.Figure(), error_msg, "", {'display': 'none'}, "", {'display': 'none'}, None
+
+# Callback for handling CIMC site clicks
+@app.callback(
+    [Output('cimc-details-box', 'children'),
+     Output('cimc-details-box', 'style')],
+    [Input('cimc-map', 'clickData'),
+     Input('close-cimc-box', 'n_clicks')],
+    [State('cimc-data-store', 'data')],
+    prevent_initial_call=True
+)
+def handle_cimc_click(clickData, close_clicks, cimc_data):
+    """Handle clicks on CIMC sites - show box for CIMC clicks, hide for base map clicks"""
+    
+    ctx = callback_context
+    
+    # Default hidden style
+    hidden_style = {
+        'position': 'absolute',
+        'right': '220px',
+        'top': '750px',
+        'padding': 10,
+        'backgroundColor': '#fff3e0',
+        'border': '2px solid #ff9800',
+        'borderRadius': 10,
+        'width': '250px',
+        'zIndex': 1000,
+        'display': 'none'
+    }
+    
+    visible_style = hidden_style.copy()
+    visible_style['display'] = 'block'
+    
+    # Check if close button was clicked
+    if ctx.triggered:
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        if trigger_id == 'close-cimc-box':
+            # Close button clicked - hide the box
+            return "", hidden_style
+    
+    # If no click data or no CIMC data stored, hide the box
+    if not clickData or not cimc_data:
+        return "", hidden_style
+    
+    # Check if points list is empty (click on basemap with no data point)
+    if 'points' not in clickData or len(clickData['points']) == 0:
+        # Clicked on basemap itself - hide box
+        return "", hidden_style
+    
+    # Get the clicked point
+    point = clickData['points'][0]
+    
+    # Check if this is a CIMC site click using customdata (reliable for both outline and main marker)
+    customdata = point.get('customdata')
+    
+    # Strict check: ONLY show box if customdata is present
+    # Clicking on basemap, census tracts, search location, or empty space will hide the box
+    if customdata is None:
+        # No customdata means it's not a CIMC marker - hide box
+        return "", hidden_style
+    
+    # Verify customdata is a list with coordinates (CIMC markers have [[lat, lon]] format)
+    if not isinstance(customdata, list) or len(customdata) < 2:
+        # Invalid customdata format - hide box
+        return "", hidden_style
+    
+    # Extract lat/lon of clicked point
+    clicked_lat = point.get('lat')
+    clicked_lon = point.get('lon')
+    
+    if clicked_lat is None or clicked_lon is None:
+        return "", hidden_style
+    
+    # Find the matching CIMC site in stored data
+    # Match based on coordinates (with small tolerance for floating point comparison)
+    tolerance = 0.0001
+    matched_site = None
+    
+    for site in cimc_data:
+        if (abs(site['LATITUDE'] - clicked_lat) < tolerance and 
+            abs(site['LONGITUDE'] - clicked_lon) < tolerance):
+            matched_site = site
+            break
+    
+    if not matched_site:
+        return "", hidden_style
+    
+    # Build the details box content
+    site_name = matched_site.get('PRIMARY_NAME', 'N/A')
+    hazard_category = matched_site.get('Hazard_Category', 'N/A')
+    distance = matched_site.get('distance_miles', 'N/A')
+    hazard_score = matched_site.get('Hazard_Score', 'N/A')
+    url = matched_site.get('URL', '')
+    
+    # Format values
+    distance_str = f"{distance:.2f}" if isinstance(distance, (int, float)) and distance != 'N/A' else 'N/A'
+    hazard_score_str = f"{hazard_score:.2f}" if isinstance(hazard_score, (int, float)) and hazard_score != 'N/A' else 'N/A'
+    
+    details_content = html.Div([
+        html.Div([
+            html.Div([
+                html.Span("Close", style={'fontSize': '11px', 'color': '#e65100', 'marginRight': '4px'}),
+                html.Button("✕", id='close-cimc-box', n_clicks=0, style={
+                    'backgroundColor': 'transparent',
+                    'border': 'none',
+                    'fontSize': '12px',
+                    'color': '#e65100',
+                    'cursor': 'pointer',
+                    'padding': 0,
+                    'lineHeight': 1
+                })
+            ], style={'position': 'absolute', 'right': '6px', 'top': '-12px', 'display': 'flex', 'alignItems': 'center'}),
+            html.H4("🏭 Selected CIMC Site Details", style={'textAlign': 'center', 'color': '#e65100', 'marginTop': 10, 'marginBottom': 10, 'fontSize': 16})
+        ], style={'position': 'relative'}),
+        html.Div([
+            html.Div([
+                html.Strong("Site Name: "),
+                html.Span(str(site_name)[:50])  # Truncate long names
+            ], style={'marginBottom': 8, 'fontSize': 13}),
+            html.Div([
+                html.Strong("Hazard Category: "),
+                html.Span(str(hazard_category))
+            ], style={'marginBottom': 8, 'fontSize': 13}),
+            html.Div([
+                html.Strong("Distance from Search Location: "),
+                html.Span(f"{distance_str} miles")
+            ], style={'marginBottom': 8, 'fontSize': 13}),
+            html.Div([
+                html.Strong("Hazard Score: "),
+                html.Span(hazard_score_str)
+            ], style={'marginBottom': 8, 'fontSize': 13}),
+            html.Div([
+                html.Strong("URL: "),
+                html.A("View Site →", href=url, target="_blank", style={'color': '#1976d2', 'textDecoration': 'none'}) if url else html.Span("N/A")
+            ], style={'fontSize': 13})
+        ])
+    ])
+    
+    return details_content, visible_style
 
 # Server configuration
 server = app.server  # Expose the server for deployment
