@@ -257,8 +257,7 @@ def get_census_tract_info(lat, lon):
             # Extract relevant information
             info = {
                 'geoid': tract.get('GEOID', 'N/A'),
-                'name': tract.get('NAME', 'N/A'),
-                'state': tract.get('STUSPS', 'N/A'),
+                'census_tract': tract.get('Census Tract', 'N/A'),
                 'gei_overall_score': tract.get('GEI_overall_score', 'N/A'),
                 'gei_health_score': tract.get('GEI_health_score', 'N/A'),
                 'gei_socio_score': tract.get('GEI_socio_score', 'N/A'),
@@ -534,9 +533,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     hover_text = f"📍 Search Location<br>{wrap_text(formatted_address.replace(', ', ', <br>', 1), 50)}"
     if census_info:
         hover_text += f"<br><br><b>GEI Score Info:</b>"
-        hover_text += f"<br>GEOID: {census_info['geoid']}"
-        hover_text += f"<br>Name: {census_info['name']}"
-        hover_text += f"<br>State: {census_info['state']}"
+        # hover_text += f"<br>GEOID: {census_info['geoid']}"
+        hover_text += f"<br>Census Tract: {census_info['census_tract']}"
         if census_info['gei_overall_score'] != 'N/A':
             hover_text += f"<br>GEI Overall Score: {census_info['gei_overall_score']:.4f}"
         else:
@@ -1084,7 +1082,8 @@ if __name__ == '__main__':
     # Run the app
     # debug=False for production, host='0.0.0.0' to accept external connections
     app.run(
-        debug=os.environ.get('DEBUG', 'True') == 'True',
+        # debug=os.environ.get('DEBUG', 'True') == 'True',
+        debug=False,
         host='0.0.0.0',
         port=port
     )
