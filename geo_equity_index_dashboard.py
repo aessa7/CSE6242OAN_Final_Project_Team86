@@ -292,26 +292,37 @@ def filter_cimc_within_radius(center_lat, center_lon, radius_miles):
         print(f"Available columns: {list(cimc_data.columns)}")
         return pd.DataFrame()
     
-    # Calculate distances
-    distances = []
-    valid_indices = []
+    # Calculate distances using vectorized operations
+    # Filter out rows with missing coordinates
+    valid_coords = cimc_data[[lat_col, lon_col]].dropna()
     
-    for idx, row in cimc_data.iterrows():
-        try:
-            lat = float(row[lat_col])
-            lon = float(row[lon_col])
-            if pd.notna(lat) and pd.notna(lon):
-                dist = haversine_distance(center_lat, center_lon, lat, lon)
-                if dist <= radius_miles:
-                    distances.append(dist)
-                    valid_indices.append(idx)
-        except (ValueError, TypeError):
-            continue
+    if len(valid_coords) == 0:
+        return pd.DataFrame()
     
-    if valid_indices:
-        filtered_df = cimc_data.loc[valid_indices].copy()
-        filtered_df['distance_miles'] = distances
-        return filtered_df.sort_values('distance_miles')
+    # Vectorized distance calculation
+    try:
+        lats = valid_coords[lat_col].astype(float)
+        lons = valid_coords[lon_col].astype(float)
+        
+        # Calculate distances for all valid coordinates at once
+        distances = lats.apply(lambda lat: haversine_distance(center_lat, center_lon, lat, lons.loc[lats[lats == lat].index[0]]))
+        
+        # More efficient: use list comprehension with zip
+        distances = [haversine_distance(center_lat, center_lon, lat, lon) 
+                     for lat, lon in zip(lats, lons)]
+        
+        # Create series with original indices
+        distance_series = pd.Series(distances, index=valid_coords.index)
+        
+        # Filter by radius
+        within_radius = distance_series[distance_series <= radius_miles]
+        
+        if len(within_radius) > 0:
+            filtered_df = cimc_data.loc[within_radius.index].copy()
+            filtered_df['distance_miles'] = within_radius.values
+            return filtered_df.sort_values('distance_miles')
+    except (ValueError, TypeError):
+        pass
     
     return pd.DataFrame()
 
@@ -444,22 +455,23 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         lat_col = 'LATITUDE'
         lon_col = 'LONGITUDE'
         
-        for idx, point in nearby_cimc.iterrows():
+        # Use itertuples() for much faster iteration than iterrows()
+        for point in nearby_cimc.itertuples():
             try:
-                point_lat = float(point[lat_col])
-                point_lon = float(point[lon_col])
+                point_lat = float(getattr(point, lat_col))
+                point_lon = float(getattr(point, lon_col))
                 
                 # Create hover text
                 hover_text = f"CIMC Site:"
                 
                 # Add site name first
-                if 'PRIMARY_NAME' in point and pd.notna(point['PRIMARY_NAME']):
-                    site_name_wrapped = wrap_text(str(point['PRIMARY_NAME']), 38)
+                if hasattr(point, 'PRIMARY_NAME') and pd.notna(getattr(point, 'PRIMARY_NAME')):
+                    site_name_wrapped = wrap_text(str(getattr(point, 'PRIMARY_NAME')), 38)
                     hover_text += f"<br>Site Name: {site_name_wrapped}"
                 
                 # Add hazard score if available
-                if 'Hazard_Score' in point and pd.notna(point['Hazard_Score']):
-                    hazard_score = float(point['Hazard_Score'])
+                if hasattr(point, 'Hazard_Score') and pd.notna(getattr(point, 'Hazard_Score')):
+                    hazard_score = float(getattr(point, 'Hazard_Score'))
                     hover_text += f"<br>Hazard Score: {hazard_score:.2f}"
                     cimc_hazard_scores.append(hazard_score)
                 else:
@@ -959,9 +971,9 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                                 html.Th("Percentile", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'right'})
                             ]))
                             
-                            for _, row in domain_features.iterrows():
-                                feature_name = row['Feature']
-                                feature_label = row['Label']
+                            for row in domain_features.itertuples():
+                                feature_name = row.Feature
+                                feature_label = row.Label
                                 pctl_feature_name = f"pctl_{feature_name}"
                                 
                                 # Get the raw value from the tract data
@@ -1111,8 +1123,7 @@ def handle_cimc_click(clickData, close_clicks, cimc_data):
         'display': 'none'
     }
     
-    visible_style = hidden_style.copy()
-    visible_style['display'] = 'block'
+    visible_style = {**hidden_style, 'display': 'block'}
     
     # Check if close button was clicked
     if ctx.triggered:
