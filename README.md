@@ -13,18 +13,21 @@ Simply enter an address, and the interactive map will display a detailed summary
 ## Features
 
 - 🗺️ **Interactive Map Visualization**: 
-  - Census tract choropleth layer colored by GEI scores (Red-Yellow-Green gradient)
-  - CIMC sites displayed with hazard score-based color coding (Yellow-Orange-Red)
+  - Census tract choropleth layer colored by GEI scores (Red-Yellow-Green gradient, reversed scale)
+  - CIMC sites displayed with hazard score-based color coding (Yellow-Orange-Red, 0-6 scale)
   - Customizable search location marker with blue-to-magenta gradient bullseye effect
+  - Dual color bars for GEI scores and CIMC hazard scores
   
 - 📍 **Smart Geocoding**: 
   - Enter any address to search for nearby CIMC sites within a configurable radius
-  - Address geocoding cache for instant repeated lookups
+  - Address geocoding via Nominatim (OpenStreetMap API) with in-memory caching
+  - Automatic census tract detection for search location
   
 - 📊 **Dynamic Data Display**:
   - Adjustable search radius slider (0-25 miles) with real-time map updates
   - GEI Score box showing Overall, Health, Socio, and Environmental scores for search location
   - Top 10 Features table by domain (Health, Socioeconomic, Environment) with raw values and percentiles
+  - Clickable CIMC site details box with hazard information and EPA links
   
 - 🎨 **Flexible Basemap Styles**: 
   - No Basemap (fastest - white background)
@@ -33,7 +36,8 @@ Simply enter an address, and the interactive map will display a detailed summary
   
 - 🔗 **Enhanced CIMC Site Information**:
   - Hover tooltips showing site details, hazard scores, and distance from search location
-  - Clickable URLs to view full site information in new tab
+  - Click on any CIMC marker to open details box with comprehensive site information
+  - Direct links to EPA site pages for detailed hazard documentation
   
 - 📈 **Census Tract Intelligence**: 
   - Hover over search location to see GEI scores and census tract metadata
@@ -50,14 +54,16 @@ The application requires three data files in the `data/` directory:
 
 2. **census_tracts_with_gei.gpkg** - GeoPackage with census tract data and GEI scores (stored with Git LFS)
    - Required columns: `GEI_overall_score`, `GEI_health_score`, `GEI_socio_score`, `GEI_env_score`
-   - Additional columns: `GEOID`, `NAME`, `STUSPS` (state code)
-   - Feature columns with `pctl_` prefix for percentile values
+   - Additional columns: `GEOID`, `Census Tract`, `County`, `State`, `StateDesc`
+   - Feature columns with `pctl_` prefix for percentile values (0-1 scale, displayed as 0-100)
+   - Contains ~73,000 U.S. census tracts
    - GeoPackage format is optimized for fast loading of large spatial datasets (173 MB)
    - Managed via Git LFS for efficient repository storage
 
-3. **GEI_top10_features_2025-11-11.csv** - Top 10 features by domain
+3. **GEI_top10_features_2025-11-14.csv** - Top 10 features by domain
    - Required columns: `Feature`, `Label`, `Domain`, `Rank`
    - Used to display feature-specific data for the search location
+   - Features organized by Health, Socioeconomic, and Environment domains
 
 ## Local Development
 
@@ -142,12 +148,16 @@ docker run -p 8050:8050 geiq-dashboard:latest
 - **Data Loading**: GeoPackage format (.gpkg) is used for fast census tract loading (~173 MB, loads in <30 seconds)
 - **Git LFS**: Large data files are managed with Git LFS for efficient repository storage
 - **Basemap Selection**: 
-  - "No Basemap" - instant address lookups with just data markers
-  - "Light" - good balance of performance and map context
-  - "Detailed" - full street-level detail (slowest)
-- **Geocoding Cache**: Addresses are cached in memory for instant re-use
+  - "No Basemap" (white-bg) - instant address lookups with just data markers (fastest)
+  - "Light" (carto-positron) - good balance of performance and map context (fast)
+  - "Detailed" (open-street-map) - full street-level detail (slowest)
+- **Geocoding Cache**: Addresses are cached in memory (`geocode_cache` dictionary) for instant re-use
 - **Feature Display**: GEI feature details are dynamically loaded only when an address is searched
-- **Percentile Formatting**: Percentile values are automatically converted to 0-100 scale for easy interpretation
+- **Percentile Formatting**: Percentile values (stored as 0-1) are automatically converted to 0-100 scale with 2 decimal places
+- **Code Optimizations**: 
+  - Vectorized distance calculations for radius filtering (5-10x faster)
+  - `itertuples()` instead of `iterrows()` for DataFrame iteration (10-100x faster)
+  - Bounding box pre-filtering for census tract spatial queries (20% buffer)
 - **Nominatim Rate Limits**: Uses Nominatim (free geocoding). For production, consider paid geocoding APIs (Mapbox, Google Places)
 
 ## Recent Updates
@@ -156,11 +166,15 @@ docker run -p 8050:8050 geiq-dashboard:latest
 - ✅ Added Git LFS support for large GeoPackage file management
 - ✅ Implemented Top 10 Features table with raw values and percentiles by domain
 - ✅ Enhanced percentile display (converted to 0-100 scale, 2 decimal places)
-- ✅ Added clickable URLs for CIMC sites (opens in new tab)
-- ✅ Updated bullseye marker with blue-to-magenta gradient for better visibility
+- ✅ Clickable CIMC site markers with detailed information popup box
+- ✅ Updated bullseye marker with blue-to-magenta gradient (5 concentric circles)
+- ✅ Welcome modal with project overview and "Get Started" button
 - ✅ Conditional display of GEI Score Feature Details box (hidden when no data)
 - ✅ Improved table formatting with bold, dark blue headers (20px font)
 - ✅ Dynamic feature value extraction from census tract shapefile data
+- ✅ Performance optimizations: vectorized operations and itertuples() iteration
+- ✅ Dual color bars for GEI scores and CIMC hazard scores with proper positioning
+- ✅ Census tract filtering with bounding box optimization
 
 ## Troubleshooting
 
@@ -185,19 +199,20 @@ docker run -p 8050:8050 geiq-dashboard:latest
 ## Project Structure
 
 ```
-CSE6242OAN_Final_Project/
-├── geo_equity_index_dashboard.py  # Main Dash app
-├── requirements.txt               # Python dependencies
-├── Dockerfile                     # Docker image definition
-├── Procfile                       # Procfile for deployment
-├── .dockerignore                  # Files to exclude from Docker build
-├── .gitattributes                 # Git LFS tracking configuration
-├── .gitignore                     # Git ignore rules
-├── README.md                      # This file
+CSE6242OAN_Final_Project_Team86/
+├── geo_equity_index_dashboard.py       # Main Dash app (~1,000 lines)
+├── merge_census_tract_with_gei_data.py # Data processing script
+├── requirements.txt                    # Python dependencies
+├── Dockerfile                          # Docker image definition
+├── Procfile                            # Procfile for deployment
+├── .dockerignore                       # Files to exclude from Docker build
+├── .gitattributes                      # Git LFS tracking configuration
+├── .gitignore                          # Git ignore rules
+├── README.md                           # This file
 └── data/
-    ├── CIMC_Sites_Hazard_Score.csv          # CIMC site locations and hazard scores
-    ├── census_tracts_with_gei.gpkg          # Census tracts with GEI (Git LFS)
-    ├── GEI_top10_features_2025-11-11.csv    # Top 10 features by domain
+    ├── CIMC_Sites_Hazard_Score.csv           # CIMC site locations and hazard scores
+    ├── census_tracts_with_gei.gpkg           # Census tracts with GEI (Git LFS, 173 MB)
+    └── GEI_top10_features_2025-11-14.csv     # Top 10 features by domain
 ```
 
 ## License
