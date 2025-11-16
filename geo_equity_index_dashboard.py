@@ -150,6 +150,7 @@ def create_default_us_map():
         height=1000,  # Fixed height
         autosize=False,  # Prevent auto-resizing
         margin=dict(l=0, r=250, t=30, b=0),  # Match the margin for consistency
+        hoverdistance=100,  # Easier hover detection (100px radius)
         # title="GEI Dashboard - Enter an address to search"
     )
     
@@ -623,7 +624,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             namelength=-1,  # Show full text
             align="left"  # Left align text for better readability
         ),
-        hovermode='closest'  # Keep tooltip visible on closest element
+        hovermode='closest',  # Keep tooltip visible on closest element
+        hoverdistance=100  # Easier hover detection (100px radius)
     )
     
     return fig, formatted_address, cimc_count, census_info
