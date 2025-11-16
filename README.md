@@ -160,22 +160,6 @@ docker run -p 8050:8050 geiq-dashboard:latest
   - Bounding box pre-filtering for census tract spatial queries (20% buffer)
 - **Nominatim Rate Limits**: Uses Nominatim (free geocoding). For production, consider paid geocoding APIs (Mapbox, Google Places)
 
-## Recent Updates
-
-### Latest Features
-- ✅ Added Git LFS support for large GeoPackage file management
-- ✅ Implemented Top 10 Features table with raw values and percentiles by domain
-- ✅ Enhanced percentile display (converted to 0-100 scale, 2 decimal places)
-- ✅ Clickable CIMC site markers with detailed information popup box
-- ✅ Updated bullseye marker with blue-to-magenta gradient (5 concentric circles)
-- ✅ Welcome modal with project overview and "Get Started" button
-- ✅ Conditional display of GEI Score Feature Details box (hidden when no data)
-- ✅ Improved table formatting with bold, dark blue headers (20px font)
-- ✅ Dynamic feature value extraction from census tract shapefile data
-- ✅ Performance optimizations: vectorized operations and itertuples() iteration
-- ✅ Dual color bars for GEI scores and CIMC hazard scores with proper positioning
-- ✅ Census tract filtering with bounding box optimization
-
 ## Troubleshooting
 
 ### Issue: Address geocoding fails
