@@ -1,1 +1,2 @@
 census_tracts_with_gei.gpkg filter=lfs diff=lfs merge=lfs -text
+cb_2020_us_all_500k.gdb/ filter=lfs diff=lfs merge=lfs -text

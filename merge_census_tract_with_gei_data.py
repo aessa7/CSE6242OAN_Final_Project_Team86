@@ -18,7 +18,7 @@ pd.set_option('display.max_colwidth', None)
 
 def main():
     # List layers in the GDB file
-    gdb_path = "Data/cb_2020_us_all_500k.gdb"
+    gdb_path = "data/cb_2020_us_all_500k.gdb"
     
     gdb_layers = gpd.list_layers(gdb_path)
     print("Layers in the GDB file:")
@@ -34,7 +34,7 @@ def main():
     print(gdf_tracts.head(3))
     
     # Read in gei data
-    gei_data_path = "GEI_Dashboard/data/GEI_scores_2025-11-14.csv"
+    gei_data_path = "data/GEI_scores_2025-11-14.csv"
     gei_df = pd.read_csv(gei_data_path, dtype={"GEOID": str})
     print(f"Loaded GEI data with {len(gei_df)} records")
     print(f"Columns: {list(gei_df.columns)}")
@@ -137,15 +137,15 @@ def main():
     gdf_tracts_gei = gdf_tracts_gei[keep_cols]
     
     # 1. GeoJSON - Best for web mapping (Leaflet, Mapbox, etc.)
-    gdf_tracts_gei.to_file("Data/census_tracts_with_gei.geojson", driver="GeoJSON")
+    gdf_tracts_gei.to_file("data/census_tracts_with_gei.geojson", driver="GeoJSON")
     print("✓ Exported to GeoJSON")
     
     # 2. Shapefile - Most compatible with GIS software (ArcGIS, QGIS)
-    gdf_tracts_gei.to_file("Data/census_tracts_with_gei.shp")
+    gdf_tracts_gei.to_file("data/census_tracts_with_gei.shp")
     print("✓ Exported to Shapefile")
     
     # 3. GeoPackage - Modern format, no column name limits
-    gdf_tracts_gei.to_file("Data/census_tracts_with_gei.gpkg", driver="GPKG")
+    gdf_tracts_gei.to_file("data/census_tracts_with_gei.gpkg", driver="GPKG")
     print("✓ Exported to GeoPackage")
     
     print("\n✓ All exports complete!")
