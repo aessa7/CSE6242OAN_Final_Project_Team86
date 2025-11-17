@@ -847,8 +847,16 @@ app.layout = html.Div([
             )
         ], style={'textAlign': 'center', 'marginBottom': 20}),
         
-        # Status message
-        html.Div(id='status-message', style={'marginBottom': 20, 'textAlign': 'center'}),
+        # Status message with loading spinner
+        html.Div([
+            dcc.Loading(
+                id="loading-spinner",
+                type="default",  # Options: "graph", "cube", "circle", "dot", "default"
+                children=html.Div(id='status-message', style={'display': 'inline-block', 'verticalAlign': 'middle'}),
+                color="#3498db",
+                parent_style={'display': 'inline-block', 'verticalAlign': 'middle'},
+            ),
+        ], style={'textAlign': 'center', 'marginBottom': 20}),
         
         # Performance tip
         html.Div([
@@ -971,6 +979,7 @@ def toggle_modal(close_clicks, about_clicks):
     [State('address-input', 'value')]
 )
 def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
+    
     if not data_loaded:
         return go.Figure(), html.Div([
             html.P("❌ CIMC_Brownfield_Final.csv not found in current directory", 
@@ -981,8 +990,10 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
     if not address or not address.strip():
         # Return default US map when no address is entered
         default_map = create_default_us_map()
-        return default_map, html.P("Enter an address to search for GEI Score and surrounding CIMC sites", 
-                                   style={'color': '#3498db', 'fontSize': 16}), "", {'display': 'none'}, "", {'display': 'none'}, None
+        return default_map, "", "", {'display': 'none'}, "", {'display': 'none'}, None
+    
+    # Show "Searching..." message while processing
+    # (This will be replaced with final results when callback completes)
     
     # Validate inputs
     radius = max(0, min(25, radius or 10))

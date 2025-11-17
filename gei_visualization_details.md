@@ -12,13 +12,13 @@ The dashboard leverages a modern Python-based technology stack specifically chos
 
 **Plotly** serves as the primary visualization engine, providing declarative chart generation with minimal boilerplate code. Unlike traditional JavaScript mapping libraries, Plotly enables pure-Python development, eliminating the context-switching between languages that typically burdens full-stack web applications.
 
-**Dash** functions as the web framework layer, built atop Flask for server-side operations and React for client-side reactivity. Dash's callback system enables dynamic user interactions without requiring explicit JavaScript coding—a significant advantage for data science teams lacking front-end expertise. The entire user interface is constructed using Dash's HTML component library, which provides Python representations of standard HTML elements (Div, H1-H5, P, Button, Table, etc.). These components are written in Python but render as actual HTML in the browser, allowing developers to build complete web interfaces without writing raw HTML strings. This is a core feature of Dash that maintains the pure-Python development paradigm throughout the entire application stack.
+**Dash** functions as the web framework layer, built atop Flask for server-side operations and React for client-side reactivity. Dash's callback system enables dynamic user interactions without requiring explicit JavaScript coding—a significant advantage for data science teams lacking front-end expertise. The entire user interface is constructed using Dash's HTML component library, which provides Python representations of standard HTML elements, maintaining the pure-Python development paradigm throughout the application stack.
 
 **GeoPandas** handles geospatial data operations, extending the familiar Pandas DataFrame structure with geometric capabilities. The library processes GeoPackage files containing approximately 73,000 U.S. census tract polygons, performing spatial queries to determine which tracts fall within user-defined search radii.
 
 **Shapely** provides computational geometry functions, most critically the Point-in-Polygon algorithm that identifies which census tract contains a user's search address. This enables instant retrieval of GEI scores without requiring manual tract selection.
 
-**Geopy** interfaces with OpenStreetMap's Nominatim geocoding service via HTTP API calls (free but rate limited), converting human-readable addresses into latitude-longitude coordinates. Each address lookup queries Nominatim's remote servers, which return geographic coordinates and formatted address strings. An in-memory caching system stores previously geocoded addresses, reducing redundant API calls and improving response times for repeated searches while respecting Nominatim's rate limiting policies.
+**Geopy** interfaces with OpenStreetMap's Nominatim geocoding service via HTTP API calls, converting human-readable addresses into latitude-longitude coordinates. Nominatim is a free, open-source geocoding solution requiring no API keys or financial costs, making it ideal for the application. The service accepts diverse address formats from complete street addresses to landmarks and partial city/state combinations.
 
 The deployment stack includes **Gunicorn** as a production-grade WSGI server and **Docker** for containerization, ensuring consistent behavior across development and production environments. The application can be deployed to cloud platforms like Heroku or AWS with minimal configuration changes. 
 
@@ -46,7 +46,7 @@ Marker size remains constant regardless of zoom level—a deliberate choice to m
 
 The user's queried address appears as a multi-layer concentric circle pattern—a "bullseye" design with five nested rings decreasing in size from outer to inner. Ring colors progress from blue through purple to magenta, with transparency gradually increasing toward the perimeter. This design creates a visually prominent focal point that remains distinguishable even when overlapping with dense CIMC site clusters or complex census tract boundaries.
 
-The bullseye's prominence addresses a critical usability challenge: in busy map regions with numerous overlapping elements, users often struggled to relocate their original search point. The high-contrast, multi-ring design ensures the search location never becomes "lost" in visual clutter.
+The bullseye's prominence addresses a critical usability challenge: in busy map regions with numerous overlapping elements, relocating the original search point can be difficult. The high-contrast, multi-ring design ensures the search location remains visually distinct within complex visual contexts.
 
 ---
 
@@ -54,43 +54,9 @@ The bullseye's prominence addresses a critical usability challenge: in busy map 
 
 ### Address Search and Geocoding
 
-Users initiate map queries by entering free-text addresses into a prominent search bar. The geocoding system translates these inputs into geographic coordinates via the Nominatim API, with automatic validation and error messaging for ambiguous or invalid addresses. Successful geocodes trigger multiple simultaneous operations: the map centers and zooms to frame the search area appropriately, nearby CIMC sites are filtered by distance, census tracts within a buffered radius are selected, and the search location's specific GEI scores are retrieved via spatial join.
+Users initiate map queries by entering free-text addresses into a prominent search bar. The geocoding system translates these inputs into geographic coordinates via the Nominatim API, with automatic validation and error messaging for ambiguous or invalid addresses. Nominatim accepts diverse address formats including complete street addresses, partial city/state combinations, landmarks (e.g., "White House"), and international locations.
 
-The system implements intelligent zoom calculation, automatically determining the optimal zoom level to display 1.5 times the user-specified search radius. This ensures the map frame provides sufficient context beyond the exact search area, allowing users to perceive neighboring tracts and identify spatial trends.
-
-#### Nominatim Geocoding Integration
-
-**Service Overview**: The application integrates with OpenStreetMap's Nominatim geocoding service through the Geopy library. Nominatim is a free, open-source geocoding solution that converts human-readable addresses into geographic coordinates (latitude/longitude pairs). Unlike commercial alternatives such as Google Maps Geocoding API or Mapbox Geocoding, Nominatim imposes no API key requirements or financial costs, making it ideal for academic and open-source projects.
-
-**Supported Address Formats**: Nominatim exhibits remarkable flexibility in address parsing, accepting multiple input formats without requiring rigid structural constraints:
-
-- **Structured Full Addresses**: Complete U.S. addresses with street number, street name, city, state, and ZIP code (e.g., "1600 Pennsylvania Avenue NW, Washington, DC 20500")
-- **Partial Addresses**: City and state combinations without street details (e.g., "Atlanta, GA" or "Manhattan, New York")
-- **Points of Interest (POI)**: Landmark names and notable locations (e.g., "White House", "Empire State Building", "Central Park")
-- **Abbreviated Formats**: Common address abbreviations including "St" for Street, "Ave" for Avenue, "Blvd" for Boulevard
-- **International Addresses**: Global address formats with country specifications (e.g., "10 Downing Street, London, UK")
-- **Mixed Precision Levels**: Addresses ranging from exact street addresses to general neighborhood or ZIP code queries
-
-The service employs sophisticated fuzzy matching algorithms that tolerate minor spelling variations, missing components, and non-standard formatting. This forgiving input handling enhances user experience by reducing failed geocoding attempts due to formatting discrepancies.
-
-**Implementation Challenges and Solutions**:
-
-*Challenge 1: Rate Limiting*
-Nominatim enforces strict usage policies limiting requests to approximately 1 query per second for sustained usage. Exceeding this threshold triggers HTTP 429 "Too Many Requests" errors, causing geocoding failures particularly problematic during deployment on shared infrastructure where multiple users might submit concurrent requests.
-
-*Solution*: The application implements a multi-layered mitigation strategy. First, an in-memory caching dictionary stores previously geocoded addresses, returning instant results for repeated queries without external API calls. Second, the geocoding function includes a 10-second timeout parameter to prevent indefinite hanging when the service is slow or unresponsive. Third, comprehensive error handling distinguishes between rate limit errors, network failures, and invalid address responses, providing users with specific, actionable error messages rather than generic failure notifications.
-
-*Challenge 2: Deployment Environment Geocoding Failures*
-During development, geocoding performed reliably on local machines (127.0.0.1), but after deployment to Render.com's cloud infrastructure, users reported consistent "not enough values to unpack" errors when entering addresses. Initial debugging suggested the geocoding function was returning unexpected data structures in production environments.
-
-*Solution*: Investigation revealed the issue stemmed from multiple potential failure modes specific to cloud deployments: network latency causing timeouts, Nominatim's servers rejecting requests from known cloud IP ranges, and transient connection failures. The fix involved restructuring the geocoding error handling to return error type codes as the third tuple element instead of None values. The code now explicitly checks for six distinct error conditions: ADDRESS_NOT_FOUND (invalid or non-existent address), TIMEOUT_ERROR (service response exceeded 10 seconds), RATE_LIMIT_ERROR (too many requests), NETWORK_ERROR (connection failures), GEOCODING_ERROR (general service exceptions), and UNPACKING_ERROR (unexpected return value structures). Each error type triggers a specific user-facing message explaining the failure and suggesting remediation steps, dramatically improving the debugging experience and user understanding when geocoding fails.
-
-*Challenge 3: Ambiguous Address Resolution*
-Nominatim sometimes returns coordinates for unintended locations when addresses are ambiguous or incomplete. For example, searching "Springfield" without state specification might return Springfield, Illinois when the user intended Springfield, Massachusetts.
-
-*Solution*: The application displays the formatted address returned by Nominatim in the map title and hover text, allowing users to verify the geocoded location matches their intent. If the result is incorrect, users can refine their search with additional geographic qualifiers. Future enhancements could implement multi-result selection interfaces where Nominatim returns multiple candidate locations, though this would complicate the current single-result workflow.
-
-**Performance Characteristics**: Under typical conditions, Nominatim geocoding completes in 200-800 milliseconds for U.S. addresses, with international addresses occasionally requiring 1-2 seconds. The caching system reduces this to near-zero latency for repeated searches. However, during peak usage periods or when Nominatim's servers experience high load, requests may timeout, triggering the 10-second timeout threshold and displaying appropriate error messages to users.
+Successful geocodes trigger multiple simultaneous operations: the map centers and zooms to frame the search area appropriately, nearby CIMC sites are filtered by distance, census tracts within a buffered radius are selected, and the search location's specific GEI scores are retrieved via spatial join. The system implements intelligent zoom calculation, automatically determining the optimal zoom level to display 1.5 times the user-specified search radius, ensuring sufficient context beyond the exact search area.
 
 ### Radius-Based Filtering
 
@@ -132,6 +98,8 @@ Traditional choropleth maps normalize color scales to the data range visible in 
 
 This dashboard maintains a single global color scale calibrated to the full national dataset of all 73,000 census tracts. A tract with GEI score 0.7 displays the same color whether viewed in California or Kentucky, enabling users to assess absolute rather than relative risk. This design trades some local visual contrast for interpretive consistency across geographic contexts.
 
+**Crucially, this global color normalization strategy successfully prioritizes cross-region comparability**, a key objective that required custom design independent of the underlying visualization library.
+
 ### Dual Independent Color Scales
 
 The map simultaneously presents two choropleth representations—census tracts colored by GEI scores and CIMC sites colored by hazard scores—each with independent color scales and legends. This design requires careful attention to color theory: the census tract palette (blue gradient) and CIMC palette (yellow-orange-red) were specifically chosen for minimal perceptual interference. Avoiding overlapping hue ranges prevents user confusion about which color corresponds to which data layer.
@@ -144,11 +112,7 @@ The basemap selector acknowledges that "one size fits all" visualization approac
 
 GeoPackage file format selection over GeoJSON provides another performance optimization. Although less universally supported, GeoPackage's binary encoding reduces file size by approximately 40% and eliminates client-side JSON parsing overhead—critical considerations when transmitting tens of thousands of polygon geometries.
 
-### Geocoding Cache Implementation
 
-Address geocoding via third-party APIs introduces latency and potential rate limiting. The dashboard implements an in-memory cache storing previously geocoded addresses, instantly returning coordinates for repeated searches without external API calls. This design particularly benefits iterative workflows where users repeatedly search the same location with different radius settings.
-
-The cache persists only during the application session—cleared on server restart—avoiding potential staleness issues with long-term storage while still capturing most practical reuse scenarios.
 
 ### Data Processing Optimizations
 
@@ -158,9 +122,70 @@ For distance filtering operations, the implementation uses vectorized operations
 
 Additional micro-optimizations include using dictionary unpacking for style object creation and attribute access instead of dictionary lookups where possible. While individually minor, these refinements collectively contribute to smoother user interactions, especially during rapid zoom changes or repeated searches.
 
+### Visual Loading Feedback
+
+The dashboard implements an animated loading spinner that provides immediate visual feedback during address geocoding and map rendering operations. When users submit an address search, a rotating spinner appears, communicating that the application is actively processing their request. This feedback mechanism addresses a common usability issue in web applications where network-dependent operations (geocoding API calls, data filtering, polygon rendering) can take 1-3 seconds to complete.
+
+The loading indicator leverages Dash's built-in `dcc.Loading` component, which automatically detects when callback functions are executing and displays the spinner for the duration of processing. Once the map and results finish rendering, the spinner disappears automatically, replaced by the completed visualization. This implementation required minimal code yet significantly improves perceived performance, demonstrating how small UX enhancements can substantially improve user confidence during asynchronous operations.
+
 ---
 
 ## Implementation Challenges
+
+### Nominatim Geocoding Architecture
+
+Integrating OpenStreetMap's Nominatim geocoding service presented several technical challenges requiring custom solutions to ensure reliable operation in production environments.
+
+**Supported Address Formats**: Nominatim exhibits remarkable flexibility in address parsing, accepting multiple input formats without requiring rigid structural constraints:
+
+- **Structured Full Addresses**: Complete U.S. addresses with street number, street name, city, state, and ZIP code (e.g., "1600 Pennsylvania Avenue NW, Washington, DC 20500")
+- **Partial Addresses**: City and state combinations without street details (e.g., "Atlanta, GA" or "Manhattan, New York")
+- **Points of Interest (POI)**: Landmark names and notable locations (e.g., "White House", "Empire State Building", "Central Park")
+- **Abbreviated Formats**: Common address abbreviations including "St" for Street, "Ave" for Avenue, "Blvd" for Boulevard
+- **International Addresses**: Global address formats with country specifications (e.g., "10 Downing Street, London, UK")
+- **Mixed Precision Levels**: Addresses ranging from exact street addresses to general neighborhood or ZIP code queries
+
+The service employs sophisticated fuzzy matching algorithms that tolerate minor spelling variations, missing components, and non-standard formatting.
+
+**Geocoding Challenges and Error Handling**
+
+Integrating a free, public geocoding service into a production web application introduces several categories of failures that require robust error handling to ensure reliable user experiences. The application addresses these challenges through comprehensive error detection and user-friendly messaging systems.
+
+**Challenge 1: Rate Limiting and Service Availability**
+
+Nominatim enforces strict usage policies limiting requests to approximately 1 query per second for sustained usage. Exceeding this threshold triggers HTTP 429 "Too Many Requests" errors, particularly problematic during deployment on shared infrastructure where multiple users might submit concurrent requests. Additionally, the free public service occasionally experiences downtime or slow response times during peak usage periods.
+
+*Solution*: The application implements a three-layer mitigation strategy. First, an in-memory caching dictionary stores previously geocoded addresses, returning instant results for repeated queries without external API calls. The cache persists only during the application session, avoiding potential staleness issues while capturing most practical reuse scenarios. Second, the geocoding function includes a 10-second timeout parameter to prevent indefinite hanging when Nominatim's servers are slow or unresponsive. Third, the system implements comprehensive error handling that distinguishes between six distinct failure modes, each triggering specific user-facing messages.
+
+*Scalability Considerations*: The current implementation uses OpenStreetMap's free public Nominatim service, which is suitable for academic projects and low-traffic applications. However, for commercial deployments or applications with higher request volumes, alternative options exist. Commercial third-party Nominatim providers offer dedicated instances with relaxed rate limits and service-level agreements (several are listed on the Nominatim wiki). For organizations with very high geocoding requirements, self-hosting a Nominatim instance provides complete control over capacity, performance, and uptime, though this approach requires server infrastructure and ongoing maintenance.
+
+**Challenge 2: Comprehensive Error Type Detection**
+
+During development, geocoding performed reliably on local machines, but after deployment to Render.com's cloud infrastructure, the application encountered multiple failure modes that manifested as cryptic "not enough values to unpack" errors. The root cause stemmed from the geocoding function returning unpredictable data structures depending on the specific failure type—sometimes returning None values, sometimes raising exceptions, and sometimes timing out silently.
+
+*Solution*: The team restructured the geocoding error handling to return consistent error type codes as the third tuple element instead of None values or raising exceptions. The system now explicitly detects and handles six distinct error conditions:
+
+1. **ADDRESS_NOT_FOUND**: The address string is valid but Nominatim cannot geocode it (e.g., a fictional location or misspelled street name). Users see: "Could not find coordinates for: [address]. Please check the address and try again."
+
+2. **TIMEOUT_ERROR**: The geocoding request exceeded the 10-second timeout threshold due to slow Nominatim servers or network latency. Users see: "The geocoding service timed out. Please try again in a moment."
+
+3. **RATE_LIMIT_ERROR**: Too many requests were submitted in a short time window, triggering Nominatim's rate limiting. Users see: "Too many requests to the geocoding service. Please wait a moment and try again."
+
+4. **NETWORK_ERROR**: Network connectivity issues prevented reaching Nominatim's servers (e.g., DNS failures, connection refused, SSL errors). Users see: "Could not connect to the geocoding service. Please check your connection and try again."
+
+5. **GEOCODING_ERROR**: General service exceptions not covered by other categories (e.g., malformed API responses, unexpected HTTP status codes). Users see: "An error occurred while geocoding the address. Please try a different address format."
+
+6. **UNPACKING_ERROR**: Unexpected return value structures from the geocoding function itself, typically indicating code-level issues. Users see: "An unexpected error occurred. Please try again."
+
+Each error type triggers a specific user-facing message explaining the failure cause and suggesting remediation steps, dramatically improving the user experience compared to generic "Error" messages. The error type codes propagate through the application's callback chain, ensuring the UI displays appropriate messages and returns to a stable state after failures.
+
+**Challenge 3: Ambiguous Address Resolution**
+
+Nominatim sometimes returns coordinates for unintended locations when addresses are ambiguous or incomplete. For example, searching "Springfield" without state specification might return Springfield, Illinois when the user intended Springfield, Massachusetts.
+
+*Solution*: The application displays the formatted address returned by Nominatim in the map title and hover text, allowing users to verify the geocoded location matches their intent. If the result is incorrect, users can refine their search with additional geographic qualifiers.
+
+**Performance Characteristics**: Under typical conditions, Nominatim geocoding completes in 200-800 milliseconds for U.S. addresses, with international addresses occasionally requiring 1-2 seconds. The caching system reduces this to near-zero latency for repeated searches. However, during peak usage periods or when Nominatim's servers experience high load, requests may timeout, triggering the 10-second timeout threshold and displaying appropriate error messages to users.
 
 ### Hover Text Limitations
 
@@ -190,7 +215,7 @@ The "No Basemap" mode partially mitigates this issue by eliminating tile server 
 
 ### Spatial Information Panel Implementation
 
-The GEI Score and CIMC Details information boxes appear as absolutely positioned HTML elements overlaying the map canvas. These panels are constructed using Dash's HTML component library (html.Div, html.H4, html.Strong, html.Span, html.Button, html.A), which provides Python-based HTML element generation. This approach arose from limitations in Plotly's native annotation system, which cannot accommodate interactive elements like close buttons or handle click-triggered visibility toggling.
+The GEI Score and CIMC Details information boxes appear as absolutely positioned HTML elements overlaying the map canvas. This approach arose from limitations in Plotly's native annotation system, which cannot accommodate interactive elements like close buttons or handle click-triggered visibility toggling.
 
 Absolute positioning with hardcoded pixel offsets creates numerous design challenges: non-responsive layouts that break on mobile devices, z-index conflicts requiring manual stacking order management, and fragile positioning that breaks when map dimensions change. The boxes assume a fixed map size of 1400×1000 pixels—resizing the browser window or adjusting map dimensions causes misalignment.
 
@@ -208,7 +233,7 @@ Specialized mapping libraries like Leaflet provide layer control out-of-box, but
 
 ### Strengths of the Plotly/Dash Approach
 
-**Rapid Prototyping**: Building the dashboard required approximately 1,000 lines of Python code with no separate JavaScript, CSS, or HTML files. The entire user interface—from headings and paragraphs to tables and buttons—is constructed using Dash's HTML component library, which translates Python function calls into browser-rendered HTML. This unified Python-only workflow eliminates the need to manage multiple file types and languages. Comparable functionality in traditional web frameworks would require 3-4× the code volume across multiple languages.
+**Rapid Prototyping**: The unified Python-only workflow eliminates the need to manage separate JavaScript, CSS, or HTML files. Comparable functionality in traditional web frameworks would require substantially more code distributed across multiple languages and file types.
 
 **Declarative Visualization**: Plotly's graph object syntax enables clear, readable figure specifications where visual attributes directly correspond to code statements. Debugging and modification prove straightforward compared to imperative drawing APIs.
 
@@ -220,21 +245,21 @@ Specialized mapping libraries like Leaflet provide layer control out-of-box, but
 
 #### Initial Tableau Evaluation
 
-The project initially considered Tableau as the visualization platform, given its reputation for rapid dashboard development and intuitive drag-and-drop interface. However, preliminary exploration quickly revealed critical limitations for our use case. Tableau's architecture fundamentally assumes static or semi-static data connections, making it poorly suited for dynamic, user-driven geocoding operations. The requirement for real-time address lookups via external APIs (Nominatim), on-the-fly distance calculations using the haversine formula, and dynamic spatial filtering of CIMC sites based on user-specified radii exceeded Tableau's computational model. Additionally, Tableau's limited Python integration and lack of support for custom geospatial libraries like GeoPandas made census tract point-in-polygon operations impractical. These constraints led to the decision to pursue a code-based solution offering full programmatic control over data processing and visualization logic.
+The team initially considered Tableau as the visualization platform, given its reputation for rapid dashboard development and intuitive drag-and-drop interface. However, preliminary exploration quickly revealed critical limitations for this use case. Tableau's architecture fundamentally assumes static or semi-static data connections, making it poorly suited for dynamic, user-driven geocoding operations. The requirement for real-time address lookups via external APIs (Nominatim), on-the-fly distance calculations using the haversine formula, and dynamic spatial filtering of CIMC sites based on user-specified radii exceeded Tableau's computational model. Additionally, Tableau's limited Python integration and lack of support for custom geospatial libraries like GeoPandas made census tract point-in-polygon operations impractical. These constraints led to the decision to pursue a code-based solution offering full programmatic control over data processing and visualization logic.
 
 #### Advanced Mapping Libraries Explored
 
 Upon encountering various implementation challenges with Plotly/Dash, research identified several alternative mapping libraries that could potentially address these limitations:
 
-**Mapbox GL JS**: A high-performance JavaScript mapping library utilizing GPU-accelerated rendering and vector tile streaming. Mapbox GL excels at visualizing large polygon datasets (like our 73,000 census tracts) through progressive level-of-detail rendering and supports advanced features including 3D terrain, building extrusions, and custom camera angles. Its powerful style specification language would have eliminated many of the manual positioning workarounds required in Plotly. However, implementing Mapbox GL would necessitate a multi-language codebase with separate backend API development for geocoding and spatial operations.
+**Mapbox GL JS**: A high-performance JavaScript mapping library utilizing GPU-accelerated rendering and vector tile streaming. Mapbox GL excels at visualizing large polygon datasets (such as the 73,000 census tracts used in this project) through progressive level-of-detail rendering and supports advanced features including 3D terrain, building extrusions, and custom camera angles. Its powerful style specification language would have eliminated many of the manual positioning workarounds required in Plotly. However, implementing Mapbox GL would necessitate a multi-language codebase with separate backend API development for geocoding and spatial operations.
 
-**Leaflet**: A lightweight (~40KB) JavaScript mapping library prioritizing simplicity and broad browser compatibility. Leaflet's extensive plugin ecosystem provides ready-made solutions for drawing tools, marker clustering, and layer controls—features that required extensive custom development in our Plotly implementation. The library's intuitive API and touch-friendly mobile interactions would address responsive design limitations encountered with absolute positioning. A Leaflet-based implementation could integrate with Dash via the Dash-Leaflet wrapper, maintaining some Python-centric workflow while accessing advanced mapping capabilities.
+**Leaflet**: A lightweight (~40KB) JavaScript mapping library prioritizing simplicity and broad browser compatibility. Leaflet's extensive plugin ecosystem provides ready-made solutions for drawing tools, marker clustering, and layer controls—features that required extensive custom development in the Plotly implementation. The library's intuitive API and touch-friendly mobile interactions would address responsive design limitations encountered with absolute positioning. A Leaflet-based implementation could integrate with Dash via the Dash-Leaflet wrapper, maintaining some Python-centric workflow while accessing advanced mapping capabilities.
 
 **D3.js**: A low-level JavaScript visualization library offering complete pixel-level control over every visual element. D3's geographic projection systems (d3-geo) and sophisticated data-join patterns would enable highly optimized custom rendering strategies, such as canvas-based drawing for census tracts instead of SVG elements. This approach could significantly improve performance but would require 2-3× more development time. D3 combined with Leaflet for basemap infrastructure represents a powerful architecture but necessitates JavaScript expertise and separate backend API development for Python-based geospatial processing.
 
 **Folium**: A Python library that generates Leaflet.js maps, offering a bridge between Python data processing and advanced web mapping features. Folium maintains Python-based development while accessing Leaflet's performance optimizations and plugin ecosystem. However, Folium provides limited interactive callback support compared to Dash, making dynamic features like radius slider updates and click-triggered information panels more challenging to implement.
 
-However, due to project time constraints and the learning curve associated with these JavaScript-based frameworks, we were unable to explore these options thoroughly. The decision to continue with Plotly/Dash was pragmatic—leveraging existing team expertise to deliver a functional prototype within the available timeline. Implementing any JavaScript-based alternative would have required separating backend (Flask/FastAPI for geocoding, distance calculations, and spatial queries) from frontend visualization, essentially doubling the architectural complexity. Future iterations of this dashboard could benefit from evaluating these alternatives, particularly for production deployments requiring mobile responsiveness, advanced cartographic controls, or improved performance with large geographic datasets.
+However, due to project time constraints and the learning curve associated with these JavaScript-based frameworks, the team was unable to explore these options thoroughly. The decision to continue with Plotly/Dash was pragmatic—leveraging existing team expertise to deliver a functional prototype within the available timeline. Implementing any JavaScript-based alternative would have required separating backend (Flask/FastAPI for geocoding, distance calculations, and spatial queries) from frontend visualization, essentially doubling the architectural complexity. Future iterations of this dashboard could benefit from evaluating these alternatives, particularly for production deployments requiring mobile responsiveness, advanced cartographic controls, or improved performance with large geographic datasets.
 
 ---
 
@@ -244,7 +269,7 @@ The Geo-Equity Index Dashboard leverages Plotly and Dash to communicate multi-di
 
 Nevertheless, the implementation revealed limitations inherent to adapting general-purpose visualization libraries for specialized geospatial applications. Specific challenges emerged in three areas: hover text formatting, click event disambiguation, and spatial information panel positioning. These required custom workarounds that exposed gaps in Plotly's abstraction layer for mapping-specific requirements. Additionally, performance constraints with large polygon datasets (>10,000 features) highlighted computational tradeoffs compared to specialized mapping libraries employing vector tile architectures and progressive rendering strategies. Research into alternatives including Mapbox GL JS, Leaflet, and D3.js revealed these JavaScript-based libraries offer superior performance and cartographic features, but at the cost of increased architectural complexity and multi-language development requirements.
 
-The findings suggest that technology selection should align with application context and deployment requirements. For this project, where development velocity and Python ecosystem integration are prioritized, the Plotly/Dash framework provides an effective solution that minimizes time-to-functionality. **Crucially, the decision to implement a global color normalization strategy successfully prioritized cross-region comparability**, a key objective that required custom design independent of the underlying visualization library. However, production applications requiring mobile responsiveness, advanced cartographic interactions, or handling large-scale geographic datasets may benefit from specialized mapping libraries. Optimal architectures for such deployments might combine Python-based backend processing (GeoPandas, Shapely) with JavaScript-based rendering frontends (Leaflet, Mapbox GL), or explore hybrid solutions like Dash-Leaflet that bridge both ecosystems while accepting some tradeoffs in either development simplicity or feature completeness.
+The findings suggest that technology selection should align with application context and deployment requirements. For this project, where development velocity and Python ecosystem integration are prioritized, the Plotly/Dash framework provides an effective solution that minimizes time-to-functionality. However, production applications requiring mobile responsiveness, advanced cartographic interactions, or handling large-scale geographic datasets may benefit from specialized mapping libraries. Optimal architectures for such deployments might combine Python-based backend processing (GeoPandas, Shapely) with JavaScript-based rendering frontends (Leaflet, Mapbox GL), or explore hybrid solutions like Dash-Leaflet that bridge both ecosystems while accepting some tradeoffs in either development simplicity or feature completeness.
 
 ---
 
@@ -273,6 +298,6 @@ This enhancement would transform the dashboard from an address-centric tool into
 ---
 
 **Document Information:**
-- **Date:** November 15, 2025
+- **Date:** November 17, 2025
 - **Project:** CSE 6242 Final Project - Team 86
 - **Focus:** Visualization Review
