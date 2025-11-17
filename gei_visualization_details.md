@@ -22,7 +22,7 @@ The dashboard leverages a modern Python-based technology stack specifically chos
 
 The deployment stack includes **Gunicorn** as a production-grade WSGI server and **Docker** for containerization, ensuring consistent behavior across development and production environments. The application can be deployed to cloud platforms like Heroku or AWS with minimal configuration changes. 
 
-For the purposes of this project, the application is deployed on Render.com @ https://geo-equity-index-dashboard.onrender.com/
+For the purposes of this project, the application is deployed on Render.com (bandwidth limited tier) @ https://geo-equity-index-dashboard.onrender.com/
 
 ---
 
