@@ -227,15 +227,32 @@ def get_coordinates(address):
         return geocode_cache[address]
     
     try:
-        location = geolocator.geocode(address)
+        location = geolocator.geocode(address, timeout=10)
         if location:
             result = (location.latitude, location.longitude, location.address)
             geocode_cache[address] = result  # Cache the result
             return result
-        return None, None, None
+        # No location found - this is a valid address that couldn't be geocoded
+        print(f"⚠️  No location found for address: {address}")
+        return None, None, "ADDRESS_NOT_FOUND"
     except Exception as e:
-        print(f"Geocoding error: {e}")
-        return None, None, None
+        # Distinguish between different error types
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        # Check for common Nominatim/network errors
+        if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+            print(f"❌ Geocoding timeout error: {error_msg}")
+            return None, None, "TIMEOUT_ERROR"
+        elif "too many requests" in error_msg.lower() or "rate limit" in error_msg.lower():
+            print(f"❌ Rate limit error: {error_msg}")
+            return None, None, "RATE_LIMIT_ERROR"
+        elif "connection" in error_msg.lower() or "network" in error_msg.lower():
+            print(f"❌ Network error: {error_msg}")
+            return None, None, "NETWORK_ERROR"
+        else:
+            print(f"❌ Geocoding error ({error_type}): {error_msg}")
+            return None, None, "GEOCODING_ERROR"
 
 def get_census_tract_info(lat, lon):
     """Get census tract information for a given latitude/longitude point"""
@@ -363,23 +380,62 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     zoom_to_use = zoom_level if zoom_level is not None else auto_zoom
     
     # Get coordinates for the address
-    lat, lon, formatted_address = get_coordinates(address)
+    try:
+        geocode_result = get_coordinates(address)
+        if geocode_result is None or len(geocode_result) != 3:
+            print(f"❌ Invalid geocoding result: {geocode_result}")
+            lat, lon, error_type = None, None, "UNKNOWN_ERROR"
+        else:
+            lat, lon, formatted_address_or_error = geocode_result
+            
+            # Check if we got an error code instead of a formatted address
+            if lat is None or lon is None:
+                error_type = formatted_address_or_error
+                formatted_address = None
+            else:
+                formatted_address = formatted_address_or_error
+                error_type = None
+    except Exception as e:
+        print(f"❌ Error unpacking geocode result: {e}")
+        lat, lon, formatted_address, error_type = None, None, None, "UNPACKING_ERROR"
     
     if lat is None or lon is None:
-        # Return empty figure with error message
+        # Return empty figure with appropriate error message based on error type
         fig = go.Figure()
+        
+        # Determine error message based on error type
+        if error_type == "ADDRESS_NOT_FOUND":
+            error_title = "Address Not Found"
+            error_message = f"Could not find coordinates for: {address}\n\nPlease check the address and try again."
+        elif error_type == "TIMEOUT_ERROR":
+            error_title = "Geocoding Service Timeout"
+            error_message = f"The geocoding service timed out.\n\nPlease try again in a moment."
+        elif error_type == "RATE_LIMIT_ERROR":
+            error_title = "Rate Limit Exceeded"
+            error_message = f"Too many requests to the geocoding service.\n\nPlease wait a moment and try again."
+        elif error_type == "NETWORK_ERROR":
+            error_title = "Network Error"
+            error_message = f"Could not connect to the geocoding service.\n\nPlease check your connection and try again."
+        elif error_type == "GEOCODING_ERROR":
+            error_title = "Geocoding Error"
+            error_message = f"An error occurred while geocoding the address.\n\nPlease try a different address format."
+        else:
+            error_title = "Error"
+            error_message = f"An unexpected error occurred.\n\nPlease try again."
+        
         fig.add_annotation(
-            text=f"Could not find coordinates for: {address}",
+            text=error_message,
             xref="paper", yref="paper",
             x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="red")
+            font=dict(size=16, color="red"),
+            align="center"
         )
         fig.update_layout(
-            title="Error: Address Not Found",
+            title=f"Error: {error_title}",
             xaxis=dict(visible=False),
             yaxis=dict(visible=False)
         )
-        return fig, f"Address not found: {address}", 0
+        return fig, f"Error: {error_title}", 0, None, None
     
     # Create base map
     fig = go.Figure()

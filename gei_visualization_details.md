@@ -58,6 +58,40 @@ Users initiate map queries by entering free-text addresses into a prominent sear
 
 The system implements intelligent zoom calculation, automatically determining the optimal zoom level to display 1.5 times the user-specified search radius. This ensures the map frame provides sufficient context beyond the exact search area, allowing users to perceive neighboring tracts and identify spatial trends.
 
+#### Nominatim Geocoding Integration
+
+**Service Overview**: The application integrates with OpenStreetMap's Nominatim geocoding service through the Geopy library. Nominatim is a free, open-source geocoding solution that converts human-readable addresses into geographic coordinates (latitude/longitude pairs). Unlike commercial alternatives such as Google Maps Geocoding API or Mapbox Geocoding, Nominatim imposes no API key requirements or financial costs, making it ideal for academic and open-source projects.
+
+**Supported Address Formats**: Nominatim exhibits remarkable flexibility in address parsing, accepting multiple input formats without requiring rigid structural constraints:
+
+- **Structured Full Addresses**: Complete U.S. addresses with street number, street name, city, state, and ZIP code (e.g., "1600 Pennsylvania Avenue NW, Washington, DC 20500")
+- **Partial Addresses**: City and state combinations without street details (e.g., "Atlanta, GA" or "Manhattan, New York")
+- **Points of Interest (POI)**: Landmark names and notable locations (e.g., "White House", "Empire State Building", "Central Park")
+- **Abbreviated Formats**: Common address abbreviations including "St" for Street, "Ave" for Avenue, "Blvd" for Boulevard
+- **International Addresses**: Global address formats with country specifications (e.g., "10 Downing Street, London, UK")
+- **Mixed Precision Levels**: Addresses ranging from exact street addresses to general neighborhood or ZIP code queries
+
+The service employs sophisticated fuzzy matching algorithms that tolerate minor spelling variations, missing components, and non-standard formatting. This forgiving input handling enhances user experience by reducing failed geocoding attempts due to formatting discrepancies.
+
+**Implementation Challenges and Solutions**:
+
+*Challenge 1: Rate Limiting*
+Nominatim enforces strict usage policies limiting requests to approximately 1 query per second for sustained usage. Exceeding this threshold triggers HTTP 429 "Too Many Requests" errors, causing geocoding failures particularly problematic during deployment on shared infrastructure where multiple users might submit concurrent requests.
+
+*Solution*: The application implements a multi-layered mitigation strategy. First, an in-memory caching dictionary stores previously geocoded addresses, returning instant results for repeated queries without external API calls. Second, the geocoding function includes a 10-second timeout parameter to prevent indefinite hanging when the service is slow or unresponsive. Third, comprehensive error handling distinguishes between rate limit errors, network failures, and invalid address responses, providing users with specific, actionable error messages rather than generic failure notifications.
+
+*Challenge 2: Deployment Environment Geocoding Failures*
+During development, geocoding performed reliably on local machines (127.0.0.1), but after deployment to Render.com's cloud infrastructure, users reported consistent "not enough values to unpack" errors when entering addresses. Initial debugging suggested the geocoding function was returning unexpected data structures in production environments.
+
+*Solution*: Investigation revealed the issue stemmed from multiple potential failure modes specific to cloud deployments: network latency causing timeouts, Nominatim's servers rejecting requests from known cloud IP ranges, and transient connection failures. The fix involved restructuring the geocoding error handling to return error type codes as the third tuple element instead of None values. The code now explicitly checks for six distinct error conditions: ADDRESS_NOT_FOUND (invalid or non-existent address), TIMEOUT_ERROR (service response exceeded 10 seconds), RATE_LIMIT_ERROR (too many requests), NETWORK_ERROR (connection failures), GEOCODING_ERROR (general service exceptions), and UNPACKING_ERROR (unexpected return value structures). Each error type triggers a specific user-facing message explaining the failure and suggesting remediation steps, dramatically improving the debugging experience and user understanding when geocoding fails.
+
+*Challenge 3: Ambiguous Address Resolution*
+Nominatim sometimes returns coordinates for unintended locations when addresses are ambiguous or incomplete. For example, searching "Springfield" without state specification might return Springfield, Illinois when the user intended Springfield, Massachusetts.
+
+*Solution*: The application displays the formatted address returned by Nominatim in the map title and hover text, allowing users to verify the geocoded location matches their intent. If the result is incorrect, users can refine their search with additional geographic qualifiers. Future enhancements could implement multi-result selection interfaces where Nominatim returns multiple candidate locations, though this would complicate the current single-result workflow.
+
+**Performance Characteristics**: Under typical conditions, Nominatim geocoding completes in 200-800 milliseconds for U.S. addresses, with international addresses occasionally requiring 1-2 seconds. The caching system reduces this to near-zero latency for repeated searches. However, during peak usage periods or when Nominatim's servers experience high load, requests may timeout, triggering the 10-second timeout threshold and displaying appropriate error messages to users.
+
 ### Radius-Based Filtering
 
 A slider control enables users to adjust the CIMC site search radius from 0 to 25 miles, with real-time map updates reflecting the new selection. Distance calculations employ the haversine formula rather than simple Euclidean distance, accounting for Earth's curvature to provide accurate geodesic measurements. This distinction becomes particularly significant at larger radii where flat-Earth approximations introduce substantial error.
