@@ -6,6 +6,10 @@ geopy
 geopandas
 shapely
 gunicorn
+fiona
+matplotlib
+seaborn
+contextily
 
 # Optional (uncomment if you need spatial index support)
 # rtree

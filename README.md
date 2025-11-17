@@ -49,6 +49,8 @@ Simply enter an address, and the interactive map will display a detailed summary
 The application requires three data files in the `data/` directory:
 
 1. **CIMC_Sites_Hazard_Score.csv** - CSV file with CIMC site locations and hazard scores
+   - *Note: This file was generated from the analysis in the `analysis/CIMC EDA and Hazard Score.ipynb` notebook.*
+   - *The notebook processes raw data (`Cleanups.gdb`) from the EPA. The raw data can be downloaded from: https://dmap-prod-oms-edc.s3.amazonaws.com/index.html#OLEM/OLEM-OPM/*
    - Required columns: `LATITUDE`, `LONGITUDE`, `Hazard_Score`
    - Optional columns: `Site_Name`, `Status`, `Type`, `Address`, `City`, `State`, `URL`
 
@@ -177,6 +179,7 @@ docker run -p 8050:8050 geiq-dashboard:latest
 - **Data Formats**: GeoPackage (.gpkg), GeoJSON, Shapefile
 - **Geocoding**: Geopy (Nominatim)
 - **Data**: Pandas, NumPy
+- **Analysis**: Matplotlib, Seaborn, Contextily
 - **Serving**: Gunicorn (production WSGI server)
 - **Containerization**: Docker
 
@@ -193,10 +196,12 @@ CSE6242OAN_Final_Project_Team86/
 ├── .gitattributes                      # Git LFS tracking configuration
 ├── .gitignore                          # Git ignore rules
 ├── README.md                           # This file
-└── data/
+├── data/
     ├── CIMC_Sites_Hazard_Score.csv           # CIMC site locations and hazard scores
     ├── census_tracts_with_gei.gpkg           # Census tracts with GEI (Git LFS, 173 MB)
     └── GEI_top10_features_2025-11-14.csv     # Top 10 features by domain
+└── analysis/
+    └── CIMC EDA and Hazard Score.ipynb       # CIMC EDA and generation of CIMC_Sites_Hazard_Score.csv
 ```
 
 ## License
@@ -205,4 +210,4 @@ CSE6242OAN_Final_Project_Team86/
 
 ## Contact
 
-For questions or issues, please contact: aessa7@gatech.edu
+For questions or issues, please contact: aessa7@gatech.edu, blarkin31@gatech.edu
