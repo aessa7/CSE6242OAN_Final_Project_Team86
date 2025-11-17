@@ -227,14 +227,15 @@ def get_coordinates(address):
         return geocode_cache[address]
     
     try:
-        location = geolocator.geocode(address)
+        location = geolocator.geocode(address, timeout=10)  # Add timeout
         if location:
             result = (location.latitude, location.longitude, location.address)
             geocode_cache[address] = result  # Cache the result
             return result
+        print(f"⚠️  No location found for address: {address}")
         return None, None, None
     except Exception as e:
-        print(f"Geocoding error: {e}")
+        print(f"❌ Geocoding error: {type(e).__name__}: {e}")
         return None, None, None
 
 def get_census_tract_info(lat, lon):
@@ -363,7 +364,16 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     zoom_to_use = zoom_level if zoom_level is not None else auto_zoom
     
     # Get coordinates for the address
-    lat, lon, formatted_address = get_coordinates(address)
+    try:
+        geocode_result = get_coordinates(address)
+        if geocode_result is None or len(geocode_result) != 3:
+            print(f"❌ Invalid geocoding result: {geocode_result}")
+            lat, lon, formatted_address = None, None, None
+        else:
+            lat, lon, formatted_address = geocode_result
+    except Exception as e:
+        print(f"❌ Error unpacking geocode result: {e}")
+        lat, lon, formatted_address = None, None, None
     
     if lat is None or lon is None:
         # Return empty figure with error message
@@ -379,7 +389,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             xaxis=dict(visible=False),
             yaxis=dict(visible=False)
         )
-        return fig, f"Address not found: {address}", 0
+        return fig, f"Address not found: {address}", 0, None, None
     
     # Create base map
     fig = go.Figure()
