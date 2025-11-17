@@ -20,7 +20,9 @@ The dashboard leverages a modern Python-based technology stack specifically chos
 
 **Geopy** interfaces with OpenStreetMap's Nominatim geocoding service via HTTP API calls (free but rate limited), converting human-readable addresses into latitude-longitude coordinates. Each address lookup queries Nominatim's remote servers, which return geographic coordinates and formatted address strings. An in-memory caching system stores previously geocoded addresses, reducing redundant API calls and improving response times for repeated searches while respecting Nominatim's rate limiting policies.
 
-The deployment stack includes **Gunicorn** as a production-grade WSGI server and **Docker** for containerization, ensuring consistent behavior across development and production environments. The application can be deployed to cloud platforms like Heroku or AWS with minimal configuration changes. For the purposes of this project, the application is deployed on Render.com @ https://geo-equity-index-dashboard.onrender.com/
+The deployment stack includes **Gunicorn** as a production-grade WSGI server and **Docker** for containerization, ensuring consistent behavior across development and production environments. The application can be deployed to cloud platforms like Heroku or AWS with minimal configuration changes. 
+
+For the purposes of this project, the application is deployed on Render.com @ https://geo-equity-index-dashboard.onrender.com/
 
 ---
 
