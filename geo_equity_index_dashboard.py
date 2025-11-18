@@ -743,7 +743,14 @@ app.layout = html.Div([
                     html.Strong("0 to 6 (most severe)"),
                     " for hazard severity.",
                     " Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics."
-                ], style={'marginBottom': 20, 'lineHeight': 1.6}),
+                ], style={'marginBottom': 15, 'lineHeight': 1.6}),
+                html.P([
+                    "💡 ",
+                    html.Strong("Performance Tip:"),
+                    " Use 'No Basemap' for instant address lookups with just markers. ",
+                    "Use 'Light' for a clean map. ",
+                    "Switch to 'Detailed' for street-level detail. ",
+                ], style={'fontSize': 13, 'color': '#666', 'textAlign': 'center', 'fontStyle': 'italic', 'marginBottom': 20}),
                 html.Button(
                     'Get Started',
                     id='close-modal',
@@ -787,7 +794,7 @@ app.layout = html.Div([
         html.Div([
             html.H1("Geo-Equity Index: \n \
        An Interactive Environmental & Socioeconomic Health Risk Mapping Tool",
-                    style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': 10, 'display': 'inline-block', 'width': '100%'}),
+                    style={'textAlign': 'center', 'color': '#2c3e50', 'marginBottom': 15, 'marginTop': 10, 'display': 'inline-block', 'width': '100%'}),
             html.Div([
                 html.Button(
                     'ℹ️ Learn more about GEI',
@@ -803,7 +810,7 @@ app.layout = html.Div([
                         'cursor': 'pointer'
                     }
                 )
-            ], style={'textAlign': 'center', 'marginBottom': 20})
+            ], style={'textAlign': 'center', 'marginBottom': 10})
         ]),
         
         # Input controls
@@ -835,7 +842,7 @@ app.layout = html.Div([
                     }
                 )
             ], style={'display': 'flex', 'alignItems': 'stretch', 'gap': '10px'})
-        ], style={'marginBottom': 20}),
+        ], style={'marginBottom': 15}),
         
         # Map style selector
         html.Div([
@@ -864,30 +871,21 @@ app.layout = html.Div([
             ),
         ], style={'textAlign': 'center', 'marginBottom': 20}),
         
-        # Performance tip
-        html.Div([
-            html.P([
-                "💡 ",
-                html.Strong("Performance Tip:"),
-                " Use 'No Basemap' for instant address lookups with just markers. ",
-                "Use 'Light' for a clean map. ",
-                "Switch to 'Detailed' for street-level detail. ",
-            ], style={'fontSize': 13, 'color': '#666', 'textAlign': 'center', 'fontStyle': 'italic'})
-        ], style={'marginBottom': 15}),
-        
-        # Radius slider above map (aligned to right edge of map)
+        # Radius slider above map (aligned with GEI colorbar)
         html.Div([
             html.Label("CIMC Site Search Radius (miles):", style={'fontWeight': 'bold', 'marginBottom': 10, 'display': 'block'}),
-            dcc.Slider(
-                id='radius-input',
-                min=0,
-                max=25,
-                step=1,
-                value=10,
-                marks={0: '0', 5: '5', 10: '10', 15: '15', 20: '20', 25: '25'},
-                tooltip={"placement": "bottom", "always_visible": True}
-            )
-        ], style={'width': '300px', 'marginLeft': 'auto', 'marginRight': '250px', 'marginTop': 10, 'marginBottom': 10}),
+            html.Div([
+                dcc.Slider(
+                    id='radius-input',
+                    min=0,
+                    max=25,
+                    step=1,
+                    value=10,
+                    marks={0: '0', 5: '5', 10: '10', 15: '15', 20: '20', 25: '25'},
+                    tooltip={"placement": "bottom", "always_visible": True}
+                )
+            ], style={'marginLeft': -10})
+        ], style={'width': '300px', 'position': 'absolute', 'right': '1350px', 'top': '250px', 'marginBottom': 50}),
         
         # Map and GEI Score Box Container
         html.Div([
@@ -926,7 +924,7 @@ app.layout = html.Div([
                     'display': 'none'  # Hidden by default
                 })
             ], style={'width': '1650px', 'position': 'relative', 'display': 'inline-block', 'verticalAlign': 'top'})
-        ], style={'marginBottom': 20, 'position': 'relative'}),
+        ], style={'marginBottom': 20, 'marginTop': 75, 'position': 'relative'}),
         
         # Hidden storage for CIMC data (for click callback)
         dcc.Store(id='cimc-data-store', data=None),
