@@ -227,13 +227,9 @@ def get_coordinates(address):
         return geocode_cache[address]
     
     print(f"🔍 Attempting to geocode: {address[:50]}...")
-    import time
-    start_time = time.time()
     
     try:
-        location = geolocator.geocode(address, timeout=3)  # Reduced to 3 seconds for debugging
-        elapsed = time.time() - start_time
-        print(f"⏱️  Geocoding took {elapsed:.2f} seconds", flush=True)
+        location = geolocator.geocode(address, timeout=10)
         
         if location:
             result = (location.latitude, location.longitude, location.address)
@@ -263,9 +259,6 @@ def get_coordinates(address):
 
 def get_census_tract_info(lat, lon):
     """Get census tract information for a given latitude/longitude point"""
-    import time
-    start_time = time.time()
-    
     global census_tracts_gdf
     
     if census_tracts_gdf is None:
@@ -292,9 +285,7 @@ def get_census_tract_info(lat, lon):
                 'gei_env_score': tract.get('GEI_env_score', 'N/A'),
             }
             
-            elapsed = time.time() - start_time
-            print(f"⏱️  get_census_tract_info took {elapsed:.2f} seconds", flush=True)
-            print(f"✓ Found census tract: GEOID={info['geoid']}, GEI={info['gei_overall_score']}", flush=True)
+            print(f"✓ Found census tract: GEOID={info['geoid']}, GEI={info['gei_overall_score']}")
             return info
         else:
             print(f"⚠️  No census tract found for point ({lat}, {lon})")
@@ -309,9 +300,6 @@ def get_census_tract_info(lat, lon):
 
 def filter_cimc_within_radius(center_lat, center_lon, radius_miles):
     """Filter CIMC data within radius using vectorized operations"""
-    import time
-    start_time = time.time()
-    
     if cimc_data is None:
         return pd.DataFrame()
     
@@ -330,7 +318,7 @@ def filter_cimc_within_radius(center_lat, center_lon, radius_miles):
     if len(valid_coords) == 0:
         return pd.DataFrame()
     
-    # Vectorized haversine distance calculation (much faster!)
+    # Vectorized haversine distance calculation 
     try:
         # Convert to radians using numpy for vectorized operations
         lat1 = np.radians(center_lat)
@@ -353,23 +341,15 @@ def filter_cimc_within_radius(center_lat, center_lon, radius_miles):
             matching_indices = valid_coords.index[within_radius_mask]
             filtered_df = cimc_data.loc[matching_indices].copy()
             filtered_df['distance_miles'] = distances[within_radius_mask]
-            
-            elapsed = time.time() - start_time
-            print(f"⏱️  filter_cimc_within_radius took {elapsed:.2f} seconds ({len(filtered_df)} sites found)", flush=True)
             return filtered_df.sort_values('distance_miles')
     except (ValueError, TypeError) as e:
-        print(f"Error in distance calculation: {e}", flush=True)
+        print(f"Error in distance calculation: {e}")
         pass
     
-    elapsed = time.time() - start_time
-    print(f"⏱️  filter_cimc_within_radius took {elapsed:.2f} seconds (0 sites found)", flush=True)
     return pd.DataFrame()
 
 def filter_census_tracts_within_radius(center_lat, center_lon, radius_miles):
     """Filter census tracts that intersect with the search radius"""
-    import time
-    start_time = time.time()
-    
     global census_tracts_gdf
     
     if census_tracts_gdf is None:
@@ -390,8 +370,6 @@ def filter_census_tracts_within_radius(center_lat, center_lon, radius_miles):
         # Filter tracts within expanded bounding box
         filtered_tracts = census_tracts_gdf.cx[min_lon:max_lon, min_lat:max_lat]
         
-        elapsed = time.time() - start_time
-        print(f"⏱️  filter_census_tracts_within_radius took {elapsed:.2f} seconds ({len(filtered_tracts)} tracts found)", flush=True)
         return filtered_tracts
         
     except Exception as e:
@@ -400,9 +378,6 @@ def filter_census_tracts_within_radius(center_lat, center_lon, radius_miles):
 
 def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap='light'):
     """Create the main map figure with optional lightweight basemap"""
-    import time
-    overall_start = time.time()
-    
     # Calculate appropriate zoom based on radius (to show 1.5x the radius)
     auto_zoom = calculate_zoom_for_radius(radius_miles)
     
@@ -471,10 +446,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     fig = go.Figure()
     
     # Layer 1: Add census tract polygons first (so they appear below other markers)
-    t1 = time.time()
     nearby_tracts = filter_census_tracts_within_radius(lat, lon, radius_miles)
-    t2 = time.time()
-    print(f"⏱️  Step 1: filter_census_tracts = {t2-t1:.2f}s", flush=True)
     
     if nearby_tracts is not None and len(nearby_tracts) > 0:
         # Convert GeoDataFrame to GeoJSON format for Plotly
@@ -487,13 +459,9 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             
             if len(valid_tracts) > 0:
                 # Create choropleth with GEI_overall_score data using blue gradient
-                t3 = time.time()
                 geojson_data = json.loads(valid_tracts.to_json())
-                t4 = time.time()
-                print(f"⏱️  Step 2: to_json() conversion = {t4-t3:.2f}s ({len(valid_tracts)} tracts)", flush=True)
                 
                 # Add choropleth layer with blue color scale
-                t5 = time.time()
                 fig.add_trace(go.Choroplethmap(
                     geojson=geojson_data,
                     locations=valid_tracts.index,
@@ -517,8 +485,6 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
                     hoverlabel=dict(namelength=-1),
                     name='Census Tracts'
                 ))
-                t6 = time.time()
-                print(f"⏱️  Step 3: add_trace(Choroplethmap) = {t6-t5:.2f}s", flush=True)
         else:
             # No GEI_overall_score data, just show tract boundaries
             geojson_data = json.loads(nearby_tracts.to_json())
@@ -537,11 +503,8 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
             ))
     
     # Layer 2: Get and add CIMC points (before address marker so address appears on top)
-    t7 = time.time()
     nearby_cimc = filter_cimc_within_radius(lat, lon, radius_miles)
     cimc_count = len(nearby_cimc)
-    t8 = time.time()
-    print(f"⏱️  Step 4: filter_cimc_within_radius = {t8-t7:.2f}s ({cimc_count} sites)", flush=True)
     
     if cimc_count > 0:
         # Prepare CIMC data for plotting
@@ -644,10 +607,7 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
     print(f"🎯 Adding address marker at: lat={lat}, lon={lon}")  # Debug print
     
     # Get census tract info for the search address
-    t9 = time.time()
     census_info = get_census_tract_info(lat, lon)
-    t10 = time.time()
-    print(f"⏱️  Step 5: get_census_tract_info = {t10-t9:.2f}s", flush=True)
     
     # Build hover text with census tract info
     # Wrap address: break after the first comma only and use a wider line width
@@ -748,8 +708,6 @@ def create_map_figure(address, radius_miles, zoom_level=None, use_light_basemap=
         hoverdistance=35  # Easier hover detection (35px radius)
     )
     
-    overall_elapsed = time.time() - overall_start
-    print(f"⏱️  TOTAL create_map_figure took {overall_elapsed:.2f} seconds", flush=True)
     return fig, formatted_address, cimc_count, census_info, nearby_cimc
 
 # Load data on startup
