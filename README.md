@@ -8,6 +8,7 @@ Welcome to the Geo-Equity Index—a comprehensive tool that aggregates data from
 The GEI score, rated from 0 (best) to 1 (worst), provides an at-a-glance assessment of environmental and socioeconomic health factors in your area.
 
 The tool also incorporates hazardous sites as defined by the EPA's Cleanup In My Community (CIMC) program, with each site ranked on a scale of 0 to 6 (most severe) for hazard severity. \
+\
 Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics.
 
 ## Features
