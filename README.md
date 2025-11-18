@@ -4,10 +4,10 @@ A Dash/Plotly web application for mapping GEI (Geo-Equity Index) scores with det
 
 ## Overview
 
-Welcome to the Geo-Equity Index—a comprehensive tool that aggregates data from the Environmenal Protection Agency (EPA), Center for Disease Control (CDC), the U.S. Census Bureau, and other authoritative sources to generate a singular health score for your neighborhood. \
-The GEI score, rated from 0 (best) to 1(worst), provides an at-a-glance assessment of environmental and socioeconomic health factors in your area.
+Welcome to the Geo-Equity Index—a comprehensive tool that aggregates data from the Environmental Protection Agency (EPA), Center for Disease Control (CDC), the U.S. Census Bureau, and other authoritative sources to generate a singular health score for your neighborhood. \
+The GEI score, rated from 0 (best) to 1 (worst), provides an at-a-glance assessment of environmental and socioeconomic health factors in your area.
 
-The tool also incorporates hazardous sites as defined by the EPA's Cleanup In My Community (CIMC) program, with each site ranked on a scale of 1 to 6 (most severe) for hazard severity. \
+The tool also incorporates hazardous sites as defined by the EPA's Cleanup In My Community (CIMC) program, with each site ranked on a scale of 0 to 6 (most severe) for hazard severity. \
 Simply enter an address, and the interactive map will display a detailed summary of the region along with nearby hazardous sites. Below the map, a comprehensive feature table breaks down your address's score in depth, providing transparency into the underlying health metrics.
 
 ## Features
@@ -67,22 +67,35 @@ The application requires three data files in the `data/` directory:
    - Used to display feature-specific data for the search location
    - Features organized by Health, Socioeconomic, and Environment domains
 
+## Live Demo
+
+The application is currently deployed at: **https://geo-equity-index-dashboard.onrender.com/**
+
+*Note: The free tier on Render may experience cold starts (30-60 second initial load) if the service has been inactive.*
+
 ## Local Development
 
 ### Prerequisites
 
 - Python 3.10 or higher
 - pip or conda
+- Git LFS (for downloading large data files)
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/aessa7/CSE6242OAN_Final_Project.git
-   cd CSE6242OAN_Final_Project
+   git clone https://github.com/aessa7/CSE6242OAN_Final_Project_Team86.git
+   cd CSE6242OAN_Final_Project_Team86
    ```
 
-2. Create a virtual environment:
+2. Install Git LFS and fetch large files:
+   ```bash
+   git lfs install
+   git lfs pull
+   ```
+
+3. Create a virtual environment:
    ```bash
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1  # Windows PowerShell
@@ -90,17 +103,17 @@ The application requires three data files in the `data/` directory:
    source .venv/bin/activate     # macOS/Linux
    ```
 
-3. Install dependencies:
+4. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Run the app:
+5. Run the app:
    ```bash
    python geo_equity_index_dashboard.py
    ```
 
-5. Open your browser to `http://127.0.0.1:8050`
+6. Open your browser to `http://127.0.0.1:8050`
 
 ## Deployment
 
@@ -157,10 +170,10 @@ docker run -p 8050:8050 geiq-dashboard:latest
 - **Feature Display**: GEI feature details are dynamically loaded only when an address is searched
 - **Percentile Formatting**: Percentile values (stored as 0-1) are automatically converted to 0-100 scale with 2 decimal places
 - **Code Optimizations**: 
-  - Vectorized distance calculations for radius filtering (5-10x faster)
-  - `itertuples()` instead of `iterrows()` for DataFrame iteration (10-100x faster)
-  - Bounding box pre-filtering for census tract spatial queries (20% buffer)
-- **Nominatim Rate Limits**: Uses Nominatim (free geocoding). For production, consider paid geocoding APIs (Mapbox, Google Places)
+  - Vectorized distance calculations for radius filtering (5-10x faster than naive iteration)
+  - `itertuples()` instead of `iterrows()` for DataFrame iteration (10-100x faster, used for CIMC marker processing and feature table generation)
+  - Bounding box pre-filtering for census tract spatial queries (20% buffer to capture edge tracts)
+- **Geocoding**: Uses Nominatim (free, no API keys required). For production with high traffic, consider paid geocoding APIs (Mapbox, Google Places) or self-hosted Nominatim instance
 
 ## Troubleshooting
 
@@ -187,21 +200,22 @@ docker run -p 8050:8050 geiq-dashboard:latest
 
 ```
 CSE6242OAN_Final_Project_Team86/
-├── geo_equity_index_dashboard.py       # Main Dash app (~1,000 lines)
-├── merge_census_tract_with_gei_data.py # Data processing script
-├── requirements.txt                    # Python dependencies
-├── Dockerfile                          # Docker image definition
-├── Procfile                            # Procfile for deployment
-├── .dockerignore                       # Files to exclude from Docker build
-├── .gitattributes                      # Git LFS tracking configuration
-├── .gitignore                          # Git ignore rules
-├── README.md                           # This file
+├── geo_equity_index_dashboard.py          # Main Dash app
+├── gei_visualization_details.md           # Technical documentation of visualization approach
+├── requirements.txt                       # Python dependencies
+├── Dockerfile                             # Docker image definition
+├── Procfile                               # Procfile for deployment
+├── .dockerignore                          # Files to exclude from Docker build
+├── .gitattributes                         # Git LFS tracking configuration
+├── .gitignore                             # Git ignore rules
+├── README.md                              # This file
 ├── data/
-    ├── CIMC_Sites_Hazard_Score.csv           # CIMC site locations and hazard scores
-    ├── census_tracts_with_gei.gpkg           # Census tracts with GEI (Git LFS, 173 MB)
-    └── GEI_top10_features_2025-11-14.csv     # Top 10 features by domain
+│   ├── CIMC_Sites_Hazard_Score.csv        # CIMC site locations and hazard scores
+│   ├── census_tracts_with_gei.gpkg        # Census tracts with GEI (Git LFS, 173 MB)
+│   └── GEI_top10_features_2025-11-14.csv  # Top 10 features by domain
 └── analysis/
-    └── CIMC EDA and Hazard Score.ipynb       # CIMC EDA and generation of CIMC_Sites_Hazard_Score.csv
+    ├── CIMC EDA and Hazard Score.ipynb    # CIMC EDA and hazard score generation
+    └── merge_census_tract_with_gei_data.py # Script to merge GEI data with census tracts
 ```
 
 ## License

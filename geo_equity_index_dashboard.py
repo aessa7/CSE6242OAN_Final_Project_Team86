@@ -802,7 +802,7 @@ app.layout = html.Div([
         
         # Input controls
         html.Div([
-            html.Label("Enter Address:", style={'fontWeight': 'bold', 'marginBottom': 5}),
+            html.Label("Enter Address (USA Only):", style={'fontWeight': 'bold', 'marginBottom': 5}),
             html.Div([
                 dcc.Input(
                     id='address-input',
