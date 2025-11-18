@@ -1040,7 +1040,6 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                             # Add header row
                             table_rows.append(html.Tr([
                                 html.Th("Feature", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'left'}),
-                                html.Th("Raw Value", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'right'}),
                                 html.Th("Percentile", style={'padding': '8px', 'borderBottom': '2px solid #2c3e50', 'textAlign': 'right'})
                             ]))
                             
@@ -1048,24 +1047,6 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                                 feature_name = row.Feature
                                 feature_label = row.Label
                                 pctl_feature_name = f"pctl_{feature_name}"
-                                
-                                # Get the raw value from the tract data
-                                value_str = "N/A"
-                                if feature_name in tract_data.index:
-                                    feature_value = tract_data[feature_name]
-                                    # Format the value nicely
-                                    if pd.notna(feature_value):
-                                        if isinstance(feature_value, (int, np.integer)):
-                                            value_str = f"{feature_value:,}"
-                                        elif isinstance(feature_value, (float, np.floating)):
-                                            if feature_value == -999:
-                                                value_str = "N/A"
-                                            else:
-                                                value_str = f"{feature_value:.4f}"
-                                        else:
-                                            value_str = str(feature_value)
-                                    else:
-                                        value_str = "N/A"
                                 
                                 # Get the percentile value
                                 pctl_str = "N/A"
@@ -1087,7 +1068,6 @@ def update_map(n_clicks, n_submit, map_id, radius, map_style, address):
                                 # Add table row
                                 table_rows.append(html.Tr([
                                     html.Td(feature_label, style={'padding': '8px', 'borderBottom': '1px solid #ddd'}),
-                                    html.Td(value_str, style={'padding': '8px', 'borderBottom': '1px solid #ddd', 'textAlign': 'right'}),
                                     html.Td(pctl_str, style={'padding': '8px', 'borderBottom': '1px solid #ddd', 'textAlign': 'right'})
                                 ]))
                             
