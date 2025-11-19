@@ -871,9 +871,9 @@ app.layout = html.Div([
             ),
         ], style={'textAlign': 'center', 'marginBottom': 20}),
         
-        # Radius slider above map (aligned with GEI colorbar)
+        # Radius slider above map (centered)
         html.Div([
-            html.Label("CIMC Site Search Radius (miles):", style={'fontWeight': 'bold', 'marginBottom': 10, 'display': 'block'}),
+            html.Label("CIMC Site Search Radius (miles):", style={'fontWeight': 'bold', 'marginBottom': 10, 'display': 'block', 'textAlign': 'center'}),
             html.Div([
                 dcc.Slider(
                     id='radius-input',
@@ -884,8 +884,8 @@ app.layout = html.Div([
                     marks={0: '0', 5: '5', 10: '10', 15: '15', 20: '20', 25: '25'},
                     tooltip={"placement": "bottom", "always_visible": True}
                 )
-            ], style={'marginLeft': -10})
-        ], style={'width': '300px', 'position': 'absolute', 'right': '1350px', 'top': '250px', 'marginBottom': 50}),
+            ])
+        ], style={'width': '300px', 'margin': '0 auto', 'marginBottom': 20}),
         
         # Map and GEI Score Box Container
         html.Div([
