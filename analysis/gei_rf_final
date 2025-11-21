@@ -1,0 +1,585 @@
+#############################################################################
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LassoCV, LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+
+
+#############################################################################
+# import EJI data + cleanup
+# E_* variables are estimates
+# EPL_* variables are percentile ranks for estimates
+# RPL_* variables are percentile ranks for domains and overall score
+# Keep E_ features and GEOID only
+#############################################################################
+eji_data_raw = pd.read_csv('../Data/EJI/EJI_2024_United_States.csv', dtype={'GEOID': str})
+
+eji_est_i = eji_data_raw.columns.str.startswith("E_")
+eji_geoid_i = eji_data_raw.columns == "GEOID"
+eji_rpl_i = eji_data_raw.columns.isin(["RPL_EJI_CBM", "RPL_HVM", "RPL_SVM", "RPL_EBM", "RPL_CBM"])
+eji_keep_i = eji_est_i | eji_geoid_i | eji_rpl_i
+eji_data = eji_data_raw.loc[:, eji_keep_i]
+eji_data = eji_data.drop(columns=['E_TOTPOP', 'E_DAYPOP']) # drop population vars -- not needed for regression
+# replace -999 values with NaN
+eji_data = eji_data.replace(-999, np.nan)
+
+############################################################################
+# import CVI data + cleanup
+#############################################################################
+cvi_data_raw = pd.read_excel('../Data/CVI/Master CVI Dataset - Oct 2023.xlsx', sheet_name='Indicator Native Units', dtype={'FIPS Code': str})
+cvi_data = cvi_data_raw.drop(columns=['State', 'County', 'Geographic Coordinates'])
+
+# import CVI index and domain score data
+cvi_domain_data = pd.read_excel('../Data/CVI/Master CVI Dataset - Oct 2023.xlsx', sheet_name='Domain CVI Values', dtype={'FIPS Code': str})
+
+# merge CVI indicator and domain data
+cvi_data = cvi_data.merge(cvi_domain_data.iloc[:,2:], on='FIPS Code', how='left')
+cvi_data.info()
+
+# clean CVI variables with dubious values
+# 'Covid-19 Vaccination Rates' should be between 0 and 100
+cvi_data.loc[cvi_data['Covid-19 Vaccination Rates']>100, 'Covid-19 Vaccination Rates'] = np.nan
+# 'Religious Organizations' should be non-negative
+cvi_data.loc[cvi_data['Religious Organizations']<0, 'Religious Organizations'] = np.nan
+
+#############################################################################
+# # Combine EJI + CVI data
+#############################################################################
+# merge EJI and CVI data -- outer merge to keep as many tracts as possible, handling missing values in later step
+merged = eji_data.merge(cvi_data, left_on='GEOID', right_on='FIPS Code', how='outer')
+# combine fips code
+merged['Tract FIPS'] = merged['GEOID'].combine_first(merged['FIPS Code'])
+merged['County FIPS'] = merged['Tract FIPS'].str.slice(0,5)
+
+# create working dataset for models with imputation
+df = merged.copy().drop(columns=['GEOID', 'FIPS Code'])
+
+# impute missing data using county median
+for col in df.columns:
+    if df[col].isna().sum() > 0 and col not in ['Tract FIPS', 'County FIPS']:
+        df[col] = df.groupby('County FIPS')[col].transform(lambda x: x.fillna(x.median()))
+
+# final dataset for analysis: including all EJI + CVI indicators, index + domain scores, outcome variable Life Expectancy
+# drop tracts with missing LE data
+eji_cvi_df = df.dropna(subset=['Life Expectancy']).reset_index(drop=True)
+
+# Y outcome variable is life expectancy
+Y = eji_cvi_df['Life Expectancy']
+
+# X predictors are all EJI + CVI indicators so dropping FIPS codes, LE, EJI/CVI domain scores and keeping everything else
+X = eji_cvi_df.drop(columns=['Tract FIPS', 'County FIPS', 'Life Expectancy', 'RPL_EJI_CBM', 'RPL_HVM', 'RPL_SVM', 'RPL_EBM', 'RPL_CBM']).drop(columns=cvi_domain_data.columns[3:].tolist())
+
+#############################################################################
+### extract EJI and CVI scores for comparison ###
+#############################################################################
+eji_index_score = eji_cvi_df['RPL_EJI_CBM']
+eji_health_score = eji_cvi_df['RPL_HVM']
+eji_socio_score = eji_cvi_df['RPL_SVM']
+# for EJI, combine environment and climate domains to create one env score for comparison
+eji_env_score = (eji_cvi_df['RPL_EBM'] + eji_cvi_df['RPL_CBM']).rank(pct=True)
+cvi_index_score = eji_cvi_df['Overall CVI Score']
+cvi_health_score = eji_cvi_df['Baseline: Health']
+# for CVI, combine socioeconomic and infrastructure domains to create one socio score
+cvi_socio_score = eji_cvi_df[['Baseline: Social Economic', 'Baseline: Infrastructure']].sum(axis=1).rank(pct=True)
+# for CVI, combine environment and climate domains to create one env score
+cvi_env_score = eji_cvi_df[['Baseline: Environment', 'Climate Change: Extreme Events', 'Climate Change: Social Economic', 'Climate Change: Health']].sum(axis=1).rank(pct=True)
+
+# check sum stats -- make sure all scores are in 0-1 range
+scores = [eji_index_score,eji_health_score,eji_socio_score,eji_env_score,cvi_index_score,cvi_health_score,cvi_socio_score,cvi_env_score]
+for x in scores:
+    print(x.describe())
+
+#############################################################################
+# Assign variables to 3 separate domains: Health, Socioeconomic, Environment
+#############################################################################
+# import EJI data dictionary
+eji_dict = pd.read_excel('../Data/EJI/EJI_DATADICTIONARY_2024.xlsx', skiprows=1)
+
+# SVM - Social Vulnerability Module
+# EBM - Environmental Burden Module
+# HVM - Health Vulnerability Module
+# CBM - Climate Burden Module
+eji_dict_est = eji_dict[eji_dict['2024 VARIABLE NAME'].str.startswith('E_')]
+
+# count of EJI indicators by domain
+eji_domains = eji_dict_est['MODULE'].value_counts()
+print(eji_domains)
+
+# print EJI indicators not assigned to a domain -- ok to exclude
+eji_dict_est[(eji_dict['2024 VARIABLE NAME'].str.startswith('E_')) & (eji_dict['MODULE'] == 'No Value') ]
+
+# import CVI data dictionary
+cvi_dict = pd.read_excel('../Data/CVI/Master CVI Dataset - Oct 2023.xlsx', sheet_name='Reference Information')
+cvi_dict.head()
+
+# count of CVI indicators by domain
+cvi_domains = cvi_dict['Domain'].value_counts()
+print(cvi_domains)
+
+# get data for each domain: including only X columns corresponding to EJI/CVI domain for health, socioeconomic, or environment
+def domain_data(data, domain_name_eji, domain_name_cvi):
+    eji_cols = eji_dict_est[eji_dict_est['MODULE'].isin(domain_name_eji)]['2024 VARIABLE NAME'].values
+    cvi_cols = cvi_dict[cvi_dict['Domain'].isin(domain_name_cvi)]['Indicator'].values
+    print(f"EJI {domain_name_eji}: {eji_cols}")
+    print(f"CVI {domain_name_cvi}: {cvi_cols}")
+    selected_cols = [col for col in data.columns if col in eji_cols or col in cvi_cols]
+    return data[selected_cols]
+
+X_health = domain_data(X, ['HVM'], ['Baseline: Health'])
+X_socio = domain_data(X, ['SVM'], ['Baseline: Social & Economic', 'Baseline: Infrastructure'])
+X_env = domain_data(X, ['EBM','CBM'], ['Baseline: Environment', 'Climate Change: Extreme Events', 'Climate Change: Social & Economic', 'Climate Change: Health'])
+
+#############################################################################
+# Correlation Analysis
+#############################################################################
+# correlation matrix
+def corr_heatmap(data):
+    print('Number of EJI + CVI features:', len(data.columns))
+    corr = data.corr()
+
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(corr, annot=False, cmap='coolwarm', center=0)
+    plt.title('Feature Correlation Matrix')
+    plt.show()
+
+# print highly correlated feature pairs
+def corr_pairs(data, threshold=0.8):
+    corr_matrix = data.corr()
+    pairs = corr_matrix.abs().unstack().sort_values(ascending=False)
+    high_corr = pairs[(pairs < 1) & (pairs > threshold)]
+    # remove duplicate pairs
+    high_corr.index = high_corr.index.map(lambda x: tuple(sorted(x)))
+    high_corr = high_corr[~high_corr.index.duplicated()]
+
+    print(f"Highly correlated feature pairs (correlation > {threshold}):")
+    pd.set_option('display.max_rows', None)
+    print(high_corr)
+
+    return high_corr
+
+# correlation by domain
+def corr_domain(data, threshold=0.8, printcols=True, heatmap=True):
+    domain_name_eji = eji_dict_est[eji_dict_est['2024 VARIABLE NAME'].isin(data.columns)]['MODULE'].unique().tolist()
+    domain_name_cvi = cvi_dict[cvi_dict['Indicator'].isin(data.columns)]['Domain'].unique().tolist()
+    print(f"Correlation analysis for EJI domain [{domain_name_eji}] & CVI domain [{domain_name_cvi}]")
+
+    if printcols:
+        print(f"Selected columns: {data.columns.tolist()}")
+
+    if heatmap:
+        corr_heatmap(data)
+        
+    high_corr_pairs = corr_pairs(data, threshold=threshold)
+    return high_corr_pairs
+
+# correlation for Health domain vars
+health_corr = corr_domain(X_health, threshold=0.7)
+
+# final selection of Health domain predictors
+# removing clear duplications between EJI and CVI, highly-correlated chronic conditions (eg: diabetes is a common comorbidity with COPD, cholesterol, etc. so keep diabetes only + the othe E_ chronic conditions), health screening vars (correlated with condition prevalence, insurance, healthcare access vars)
+health_col_keep = ['E_CANCER','E_DIABETES','E_CHD', 'E_ASTHMA', 'E_MHLTH', 'Drug Overdose Deaths per 100,000 People', 'Alcohol Abuse', 'Suicide Rates', 'COVID-19 Deaths', 'HIV', 'Infant Mortality', 'Low birthweight', 'Pre-term birth', 'Teen births', 'ADHD Prevalence', 'Child Mortality', 'Free or Reduced Price School Lunch', 'Proximity to Nursing Homes', 'Number of Hospital Beds per 10,000 people', 'Covid-19 Vaccination Rates', 'Medically Underserved Areas', 'Current Lack of Health Insurance', 'Proximity to hospitals ']
+
+# correlation for Socioeconomic domain vars
+socio_corr = corr_domain(X_socio, threshold=0.7)
+
+# final selection of Socioeconomic domain predictors
+# removing clear duplications between EJI and CVI, duplicate measures of income/poverty
+socio_col_keep = ['E_MINRTY', 'E_POV200', 'E_NOHSDP', 'E_UNEMP', 'E_RENTER', 'E_HOUBDN', 'E_UNINSUR', 'E_NOINT', 'E_AGE65', 'E_AGE17', 'E_DISABL', 'E_LIMENG', 'E_MOBILE', 'E_GROUPQ', 'Below Poverty', 'Homicide Rate', 'Gun Violence', 'Religious Organizations', 'Civic and Social Organizations', 'Single-Parent Households', 'Foster Children', 'Undocumented Population', 'Hate Crimes', 'Prison Population', 'Redlining', 'Homeless Population', 'Veterans Population', 'Multi-Unit Structures', 'Mobile Homes', 'Crowding', 'No Vehicle', 'Housing Foreclosure Risk', 'Percent of Housing Units Built Between 1940-1969 as of 2015-2019', 'Delay (congestion) per capita/census tract', 'Flooding risk to roads', 'Lane miles per capita', 'Road Quality and Maintenance', 'Public Transit Performance', 'Bridge Quality and Maintenance', 'Walkability', 'Residential Energy Cost Burden', 'Share of energy from fossil fuels', 'EV Charging Stations', 'Modified Retail Food Environment Index', 'Food Insecurity', 'Access to Healthy Foods', 'Indoor Plumbing', 'Percent of Household with no internet access', 'Percent of household with smartphone but no other device.', 'Percent of Unbanked Households', 'Payday lending rank', 'Housing Affordability (renters)', 'Housing Affordability (owners)', 'Tax Base: Median Real Estate Taxes Paid', 'Voter Turnout 2020', 'Public Library Locations', 'HUD Public Housing', 'Aggregate funding amount for HUD grants']
+
+# correlation for Environment domain vars
+env_corr = corr_domain(X_env)
+
+# final selection of Environment domain predictors
+# removing clear duplication between EJI and CVI, duplicate measures of temperature
+env_col_keep = ['E_OZONE', 'E_PM', 'E_DSLPM', 'E_TOTCR', 'E_NPL', 'E_TRI', 'E_TSD', 'E_RMP', 'E_COAL', 'E_LEAD', 'E_PARK', 'E_HOUAGE', 'E_WLKIND', 'E_RAIL', 'E_ROAD', 'E_AIRPRT', 'E_IMPWTR', 'E_NEHD', 'E_BURN', 'E_SMOKE', 'E_CFLD', 'E_DRGT', 'E_HRCN', 'E_RFLD', 'E_SWND', 'E_TRND', 'Total vehicle miles traveled per capita', 'Proximity to Ports', 'Rail Crossings', 'Traffic Proximity and Volume', 'National Transportation Noise Map', 'Risk-Screening Environmental Indicators (RSEI) ', 'Air Tox Respiratory', 'Air Tox Neurological', 'Air Tox Liver', 'Air Tox Developmental', 'Air Tox Reproductive', 'Air Tox Kidney', 'Air Tox Immunological', 'Air Tox Thyroid', 'Air Tox Total Cancer Risk', 'Black Carbon', 'Agricultural pesticides', 'Lead in drinking water violations', 'Superfund Sites', 'Brownfields', 'Stream Toxicity Risk-Screening Environmental Indicators (RSEI)', 'Proximity to facilities participating in air markets', 'NPL sites', 'Hazardous Waste Management Facilities (TSDFs) ', 'Hazardous Waste Generator/Incinerators', 'Facilities with Enforcement or Violation', 'Landfills', 'TSCA Facilities ', 'Risk Management Plan Facilities', 'Chemical Manufacturers', 'Metal Recyclers', 'Active Oil and Gas Wells', 'Annual average PM2.5 concentrations', 'NO2 concentration', 'Impermeable Surfaces', 'Forest Land Cover', 'Native American Lands', 'Temperature-related mortality', 'Deaths from climate disasters', 'Increased PM2.5 mortality - CVD (ages 65+)', 'Increased Ozone mortality (all ages)', 'Increase in childhood asthma incidence', 'Aedes aegypti dengue transmission increase', 'Aedes aegypti zika transmission increase', 'FEMA Hazard Mitigation Grants ', 'Flooding risk to properties', 'Wildfire risk to properties', 'Property taxes expected to be lost by 2045 due to chronic inundation ', 'Cost of climate disasters', 'High-Risk Jobs Productivity (% Change)', 'Yields (% change)', 'Outdoor workers - work days at risk per year', 'Expected Annual Loss - Agriculture Value', 'Expected Annual Loss - Building Value', 'Expected Annual Loss - Population Equivalence ', 'Residential Energy Expenditures (% change)', 'Share of Jobs in Agriculture', 'State energy-related carbon dioxide emissions by year', 'Methane Emissions', 'Property Crimes (% change)', 'Violent Crimes (% change)', 'Cold Wave - Annualized Frequency', 'Days with maximum temperature above 40C', 'Maximum of maximum temperatures', 'Mean temperature', 'Urban Heat Island Extreme Heat Days', 'Consecutive Dry Days', 'Surface PM2.5', 'Snowfall', 'Standardized Precip Index']
+
+#############################################################################
+# function to calculate GEI domain score from model estimation of outcome 
+# + comparison with EJI/CVI
+#############################################################################
+def calc_index_score(y, ypred, eji_dom_score, cvi_dom_score):
+    # higher score indicates higher vulnerability
+    gei_score = pd.Series(ypred).rank(pct=True, ascending=False)
+    y_true_pctl = pd.Series(y).rank(pct=True, ascending=False)
+    gei_score.name = 'gei_score'
+    y.name = 'y_true'
+
+    # print first 5 obs of ytrue, ypred, GEI/EJI/CVI scores - lower ypred (life expectancy) should have higher GEI score
+    print(pd.concat([y, pd.Series(ypred, name='y_pred'), gei_score, eji_dom_score, eji_index_score, cvi_dom_score, cvi_index_score], axis=1).head())
+
+    # pearson's correlation between ytrue and indices
+    corr_gei_eji = gei_score.corr(eji_dom_score)
+    corr_gei_cvi = gei_score.corr(cvi_dom_score)
+    corr_gei_y = gei_score.corr(y_true_pctl)
+    corr_eji_y = eji_dom_score.corr(y_true_pctl)
+    corr_cvi_y = cvi_dom_score.corr(y_true_pctl)
+
+    print(f"Correlation between GEI domain index and EJI domain index: {corr_gei_eji:.4f}")
+    print(f"Correlation between GEI domain index and CVI domain index: {corr_gei_cvi:.4f}")
+    print(f"Correlation between GEI domain index and y_true: {corr_gei_y:.4f}")
+    print(f"Correlation between EJI domain index and y_true: {corr_eji_y:.4f}")
+    print(f"Correlation between CVI domain index and y_true: {corr_cvi_y:.4f}")
+
+    # simple linear regression of indices on ytrue
+    def get_r2(x, y):
+        reg = LinearRegression()
+        i = x.dropna().index.to_list()
+        x1, y1 = x[i].to_frame(), y[i]
+        r2 = reg.fit(x1, y1).score(x1, y1)
+        return r2
+
+    r2_gei = get_r2(gei_score, y)
+    r2_eji = get_r2(eji_dom_score, y)
+    r2_cvi = get_r2(cvi_dom_score, y)
+
+    print(f"GEI R-squared on predicting y_true: {r2_gei:.4f}")
+    print(f"EJI R-squared on predicting y_true: {r2_eji:.4f}")
+    print(f"CVI R-squared on predicting y_true: {r2_cvi:.4f}")
+
+    return gei_score, [corr_gei_eji, corr_gei_cvi, corr_gei_y, corr_eji_y, corr_cvi_y], [r2_gei, r2_eji, r2_cvi]
+
+#############################################################################
+# # LASSO Regression
+#############################################################################
+
+# run LASSO feature selection with 5-fold CV
+def lasso_feature_selection(x, y, domain_name):
+
+    lasso = LassoCV(cv=5, random_state=42, max_iter=10000)
+
+    print(f"LASSO feature selection for domain: {domain_name}")
+    xscaled = StandardScaler().fit_transform(x)
+    lasso.fit(xscaled, y)
+
+    ypred = lasso.predict(xscaled)
+    mse = mean_squared_error(y, ypred)
+    print(f"LASSO Mean Squared Error: {mse:.4f}")
+
+    rsquared = lasso.score(xscaled, y)
+    print(f"LASSO R-squared: {rsquared:.4f}")
+    
+    coef = pd.Series(lasso.coef_, index=x.columns)
+    print("LASSO Coefficients:")
+    print(coef)
+    
+    selected_features = coef[coef != 0].index.tolist()
+    print("Number of original features:", x.shape[1])
+    print(f"Selected features ({len(selected_features)}): {selected_features}")
+    return ypred, selected_features
+    
+
+# ## Health LASSO
+# lasso can't work with missing values so drop missing rows
+i = X_health[health_col_keep].dropna().index
+X_health_clean = X_health[health_col_keep].dropna().reset_index(drop=True)
+Y_health_clean = Y[i].reset_index(drop=True)
+
+Y_health_pred, X_health_selected = lasso_feature_selection(X_health_clean, Y_health_clean, "Health")
+health_gei_score_lasso, health_corr_lasso, heatlh_r2_lasso = calc_index_score(Y_health_clean, Y_health_pred, eji_health_score[i].reset_index(drop=True), cvi_health_score[i].reset_index(drop=True))
+
+# ## Socio LASSO
+# lasso can't work with missing values so drop missing rows
+i = X_socio[socio_col_keep].dropna().index
+X_socio_clean = X_socio[socio_col_keep].dropna().reset_index(drop=True)
+Y_socio_clean = Y[i].dropna().reset_index(drop=True)
+
+Y_socio_pred, X_socio_selected = lasso_feature_selection(X_socio_clean, Y_socio_clean, "Socio")
+socio_gei_score_lasso, socio_corr_lasso, socio_r2_lasso = calc_index_score(Y_socio_clean, Y_socio_pred, eji_socio_score[i].reset_index(drop=True), cvi_socio_score[i].reset_index(drop=True))
+
+# ## Envir LASSO
+
+# %%
+# lasso can't work with missing values so drop missing rows
+env_col_keep_lasso = ['E_OZONE', 'E_PM', 'E_DSLPM', 'E_TOTCR', 'E_NPL', 'E_TRI', 'E_TSD', 'E_RMP', 'E_COAL', 'E_LEAD', 'E_PARK', 'E_HOUAGE', 'E_WLKIND', 'E_RAIL', 'E_ROAD', 'E_AIRPRT', 'E_IMPWTR', 'E_NEHD', 'E_BURN', 'E_SMOKE', 'E_CFLD', 'E_DRGT', 'E_HRCN', 'E_RFLD', 'E_SWND', 'E_TRND']
+i = X_env[env_col_keep_lasso].dropna().index
+X_env_clean = X_env[env_col_keep_lasso].dropna().reset_index(drop=True)
+Y_env_clean = Y[i].dropna().reset_index(drop=True)
+
+Y_env_pred, X_env_selected = lasso_feature_selection(X_env_clean, Y_env_clean, "Env")
+env_gei_score_lasso, env_corr_lasso, env_r2_lasso = calc_index_score(Y_env_clean, Y_env_pred, eji_env_score[i].reset_index(drop=True), cvi_env_score[i].reset_index(drop=True))
+
+
+#############################################################################
+# # Random Forest
+#############################################################################
+
+# random forest with grid search
+def rf(x, y, domain):
+    print(f"Random Forest Regression for domain: {domain}")
+    rfg = RandomForestRegressor(random_state=14, n_jobs=-1)
+    param_grid = {
+        'n_estimators': [100, 200, 300],
+        'max_depth': [10, 20, None]
+    }
+
+    # use 3-fold CV instead of 5 and ramdom search instead of grid search to reduce runtime
+    grid_search = GridSearchCV(estimator=rfg, param_grid=param_grid, cv=3, n_jobs=-1)
+    # grid_search = RandomizedSearchCV(estimator=rfg, param_distributions=param_grid, n_iter=6, cv=3, n_jobs=-1, random_state=42)
+    grid_search.fit(x, y)
+    print("Best RF parameters: ", grid_search.best_params_)
+    print("Best mean squared error: ", grid_search.best_score_)
+
+    model = grid_search.best_estimator_
+    model.fit(x,y)
+    
+    ypred = model.predict(x)
+    mse = mean_squared_error(y, ypred)
+    print(f"Random Forest Mean Squared Error: {mse:.4f}")
+    rsquared = model.score(x, y)
+    print(f"Random Forest R-squared: {rsquared:.4f}")
+    
+    importances = model.feature_importances_
+    feature_importance_df = pd.DataFrame({'Feature': x.columns, 'Importance': importances})
+    feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False)
+    print(feature_importance_df)
+
+    return ypred, feature_importance_df
+
+# plot top 10 feature importance for each domain for random forest
+def plot_feature_importance(feature_importance_df, domain):
+    # Sort data and get top 10
+    sort_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(10)
+    sort_df = sort_df.sort_values(by='Importance', ascending=True)  # Reverse for plotting
+    
+    # Create figure with better styling (smaller height for 10 bars)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Create gradient colors based on importance values
+    colors = plt.cm.RdPu(sort_df['Importance'] / sort_df['Importance'].max())
+    
+    # Create horizontal bar chart with smaller bar height
+    bars = ax.barh(sort_df['Feature'], sort_df['Importance'], 
+                   height=0.6, color=colors, edgecolor='white', linewidth=1.2)
+    
+    # Customize title and labels
+    ax.set_title(f'Top 10 Feature Importance: {domain} Domain', 
+                 fontsize=15, fontweight='bold', pad=15)
+    ax.set_xlabel('Importance Score', fontsize=12, fontweight='semibold')
+    # ax.set_ylabel('Features', fontsize=12, fontweight='semibold')
+    
+    # Add value labels on bars
+    for i, (bar, value) in enumerate(zip(bars, sort_df['Importance'])):
+        ax.text(value, bar.get_y() + bar.get_height()/2, 
+                f' {value:.4f}', 
+                va='center', fontsize=9, color='black', fontweight='medium')
+    
+    # Customize grid
+    ax.grid(axis='x', alpha=0.3, linestyle='--', linewidth=0.7)
+    ax.set_axisbelow(True)
+    
+    # Remove top and right spines
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_linewidth(1.5)
+    ax.spines['bottom'].set_linewidth(1.5)
+    
+    # Adjust tick parameters
+    ax.tick_params(axis='both', which='major', labelsize=10)
+    
+    # Add a subtle background color
+    ax.set_facecolor('#f8f9fa')
+    fig.patch.set_facecolor('white')
+    
+    plt.tight_layout()
+    plt.savefig(f'../Output/rf_feature_importance_{domain.lower()}.png', 
+                dpi=300, bbox_inches='tight', facecolor='white')
+    plt.show()
+
+# ## Health RF
+X_health_clean = X_health[health_col_keep]
+Y_health_pred, X_health_importance = rf(X_health_clean, Y, "Health")
+health_gei_score_rf, health_corr_rf, health_r2_rf = calc_index_score(Y, Y_health_pred, eji_health_score, cvi_health_score)
+
+# Rename features for better readability in the plot
+X_health_importance_renamed = X_health_importance.copy()
+rename_dict = {
+    'E_MHLTH': 'Self-Reported Mental Health',
+    'E_ASTHMA': 'Asthma Prevalence',
+    'E_DIABETES': 'Diabetes Prevalence',
+    'Current Lack of Health Insurance': 'Lack of Health Insurance',
+    'Proximity to hospitals ': 'Proximity to Hospitals',
+    'Drug Overdose Deaths per 100,000 People': 'Drug Overdose Deaths'}
+X_health_importance_renamed['Feature'] = X_health_importance_renamed['Feature'].replace(rename_dict)
+
+plot_feature_importance(X_health_importance_renamed, "Health")
+
+# ## Socio RF
+X_socio_clean = X_socio[socio_col_keep]
+Y_socio_pred, X_socio_importance = rf(X_socio_clean, Y, "Socio")
+socio_gei_score_rf, socio_corr_rf, socio_r2_rf = calc_index_score(Y, Y_socio_pred, eji_socio_score, cvi_socio_score)
+
+# rename features for better readability in the plot
+X_socio_importance_renamed = X_socio_importance.copy()
+rename_dict = {
+    'Tax Base: Median Real Estate Taxes Paid': 'Median Real Estate Taxes',
+    'Percent of Household with no internet access': 'No Internet',
+    'Percent of Housing Units Built Between 1940-1969 as of 2015-2019': '% Housing Units Built 1940-1969'}
+X_socio_importance_renamed['Feature'] = X_socio_importance_renamed['Feature'].replace(rename_dict)
+
+plot_feature_importance(X_socio_importance_renamed, "Socioeconomic")
+
+# ## Envir RF
+X_env_clean = X_env[env_col_keep]
+Y_env_pred, X_env_importance = rf(X_env_clean, Y, "Env")
+env_gei_score_rf, env_corr_rf, env_r2_rf = calc_index_score(Y, Y_env_pred, eji_env_score, cvi_env_score)
+
+# rename features for better readability in the plot
+X_env_importance_renamed = X_env_importance.copy()
+rename_dict = {
+    'Deaths from climate disasters': 'Deaths from Climate Disasters',
+    'Brownfields': 'Proximity to Brownfields Sites',
+    'Increased PM2.5 mortality - CVD (ages 65+)': 'Increased PM2.5 Mortality - CVD (65+)',
+    'E_HOUAGE': '% Houses Built Before 1980 (Lead Exposure Risk)',
+    'Impermeable Surfaces': '% Developed Imperviousness',
+    'Risk Management Plan Facilities': 'Proximity to Risk Management Plan Facilities',
+    'Metal Recyclers': 'Proximity to Metal Recyclers',
+    # 'Expected Annual Loss - Building Value': 'Expected Annual Loss - Building Value',
+    'Chemical Manufacturers': 'Proximity to Chemical Manufacturers'
+}
+X_env_importance_renamed['Feature'] = X_env_importance_renamed['Feature'].replace(rename_dict)
+
+plot_feature_importance(X_env_importance_renamed, "Environmental")
+
+#############################################################################
+# # Geo Index Score
+#############################################################################
+# calculate overall GEI score
+def calc_gei_overall(domain_scores):
+    sum = pd.concat(domain_scores, axis=1).sum(axis=1)
+    gei_score = pd.Series(sum).rank(pct=True)
+    gei_score.name = 'gei_index'
+
+    y_true_pctl = pd.Series(Y).rank(pct=True, ascending=False)
+
+    # pearson's correlation between ytrue and indices
+    corr_gei_eji = gei_score.corr(eji_index_score)
+    corr_gei_cvi = gei_score.corr(cvi_index_score)
+    corr_gei_y = gei_score.corr(y_true_pctl)
+    corr_eji_y = eji_index_score.corr(y_true_pctl)
+    corr_cvi_y = cvi_index_score.corr(y_true_pctl)
+
+    print(f"Correlation of GEI overall index with EJI overall index: {corr_gei_eji:.4f}")
+    print(f"Correlation of GEI overall index with CVI overall index: {corr_gei_cvi:.4f}")
+    print(f"Correlation of GEI overall index with y_true: {corr_gei_y:.4f}")
+    print(f"Correlation of EJI overall index with y_true: {corr_eji_y:.4f}")
+    print(f"Correlation of CVI overall index with y_true: {corr_cvi_y:.4f}")
+
+    # simple linear regression of indices on ytrue
+    def get_r2(x, y):
+        reg = LinearRegression()
+        i = x.dropna().index.to_list()
+        x1, y1 = x[i].to_frame(), y[i]
+        r2 = reg.fit(x1, y1).score(x1, y1)
+        return r2
+
+    r2_gei = get_r2(gei_score, Y)
+    r2_eji = get_r2(eji_index_score, Y)
+    r2_cvi = get_r2(cvi_index_score, Y)
+
+    print(f"GEI R-squared on predicting y_true: {r2_gei:.4f}")
+    print(f"EJI R-squared on predicting y_true: {r2_eji:.4f}")
+    print(f"CVI R-squared on predicting y_true: {r2_cvi:.4f}")
+    
+    return gei_score, [corr_gei_eji, corr_gei_cvi, corr_gei_y, corr_eji_y, corr_cvi_y], [r2_gei, r2_eji, r2_cvi]
+
+
+gei_all_rf, corr_all_rf, r2_all_rf = calc_gei_overall([health_gei_score_rf, socio_gei_score_rf, env_gei_score_rf])
+
+# print comparison table for best RF model vs EJI/CVI
+
+rf_corrs = np.vstack([
+    health_corr_rf,
+    socio_corr_rf,
+    env_corr_rf,
+    corr_all_rf
+])
+
+rf_r2 = np.vstack([
+    health_r2_rf,
+    socio_r2_rf,
+    env_r2_rf,
+    r2_all_rf
+])
+
+all_stats = np.hstack([rf_corrs, rf_r2])
+
+result = pd.DataFrame(
+    all_stats,
+    columns=['Corr(GEI, EJI)', 'Corr(GEI, CVI)', 'Corr(GEI, y_true)', 'Corr(EJI, y_true)', 'Corr(CVI, y_true)', 'GEI R2', 'EJI R2', 'CVI R2'],
+    index=['Health', 'Socio', 'Env', 'Overall']
+)
+print(result.round(2))
+
+#############################################################################
+# # Output
+#############################################################################
+### get state and county names for all census tracts in final dataset
+
+# get names from EJI data
+eji_names = eji_data_raw[['GEOID','COUNTY','StateDesc','STATEABBR']]
+
+# get names from CVI data
+cvi_names = cvi_data_raw[['FIPS Code','State','County']]
+
+# combine
+all_names = eji_names.merge(cvi_names, left_on='GEOID', right_on='FIPS Code', how='outer')
+all_names['Tract FIPS'] = all_names['GEOID'].combine_first(all_names['FIPS Code'])
+all_names['Census Tract'] = all_names['Tract FIPS'].str[5:]
+all_names['County'] = all_names['COUNTY'].combine_first(all_names['County']).str.replace(' County','')
+all_names['State'] = all_names['STATEABBR'].combine_first(all_names['State'])
+
+# fill missing state description and print to check
+all_names = all_names.sort_values(by=['State','StateDesc'], na_position='last').ffill()
+print(all_names[['State','StateDesc']].drop_duplicates())
+
+all_names = all_names[['Tract FIPS','Census Tract','County','State','StateDesc']]
+
+# get top 10 features of each domain -- output as a dataset with rank + var labels
+def top10(domain_importance, domain_name):
+    top10 = domain_importance.sort_values(by='Importance', ascending=False)[:10]
+    top10['Domain'] = domain_name
+    top10['Rank'] = top10['Importance'].rank(ascending=False)
+    top10 = top10.merge(eji_dict[['2024 VARIABLE NAME','2024 VARIABLE DESCRIPTION']], how='left', left_on='Feature', right_on='2024 VARIABLE NAME')
+    top10 = top10.merge(cvi_dict[['Indicator','Indicator Unit']], how='left', left_on='Feature', right_on='Indicator')
+    top10['Label'] = top10['2024 VARIABLE DESCRIPTION'].combine_first(top10['Indicator Unit'])
+    top10 = top10[['Feature','Label','Domain','Rank']]
+
+    return top10
+
+top10_health = top10(X_health_importance, 'Health')
+top10_socio = top10(X_socio_importance, 'Socioeconomic')
+top10_env = top10(X_env_importance, 'Environment')
+
+top10_features_df = pd.concat([top10_health, top10_socio, top10_env], axis=0)
+
+from datetime import date
+today = date.today()
+top10_features_df.to_csv(f'../Output/GEI_top10_features_{today}.csv', index=False)
+
+### output index scores and top 10 features of each domain to CSV ###
+# get GEI overall and domain scores
+gei_scores = pd.concat([eji_cvi_df['Tract FIPS'], gei_all_rf, health_gei_score_rf, socio_gei_score_rf, env_gei_score_rf], axis=1, keys=['Tract FIPS', 'GEI_overall_score', 'GEI_health_score', 'GEI_socio_score', 'GEI_env_score']).reset_index(drop=True)
+
+# get top 10 features of each domain
+top10_features = top10_features_df['Feature'].to_list()
+keepvars = top10_features + ['Tract FIPS']
+
+# merge top 10 features and GEI scores
+output_df = eji_cvi_df[keepvars].merge(gei_scores, on='Tract FIPS', how='inner')
+
+# calculate percentile rank for each feature
+for col in top10_features:
+    output_df[f"pctl_{col}"] = output_df[col].rank(pct=True)
+
+# add state/county name
+output_df = output_df.merge(all_names, on='Tract FIPS', how='left').rename(columns={'Tract FIPS':'GEOID'})
+
+today = date.today()
+output_df.to_csv(f'../Output/GEI_scores_{today}.csv', index=False)
+
+
